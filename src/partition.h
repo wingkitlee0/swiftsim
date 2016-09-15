@@ -39,6 +39,7 @@ struct partition {
   enum partition_type type;
   int grid[3];
 };
+
 /* Repartition type to use. */
 enum repartition_type {
   REPART_NONE = 0,
@@ -51,16 +52,36 @@ enum repartition_type {
 /* Simple descriptions of types for reports. */
 extern const char *repartition_name[];
 
-void partition_repartition(enum repartition_type reparttype, int nodeID,
-                           int nr_nodes, struct space *s, struct task *tasks,
-                           int nr_tasks);
+/* Repartition data. */
+struct repartition_data {
+  enum repartition_type reparttype;
+  struct space *s;
+  float *weights_e;
+  float *weights_v;
+  int bothweights;
+  int count;
+  int nodeID;
+  int nr_cells;
+  int nr_nodes;
+};
+
+void partition_init(struct partition *partition,
+                    enum repartition_type *reparttype,
+                    const struct swift_params *params, int nr_nodes);
+
 void partition_initial_partition(struct partition *initial_partition,
                                  int nodeID, int nr_nodes, struct space *s);
 
+void partition_repartition(struct repartition_data *repartdata);
+void partition_repartition_init(struct repartition_data *repartdata);
+void partition_repartition_clear(struct repartition_data *repartdata);
+void partition_repartition_accumulate(enum repartition_type reparttype,
+                                      int nodeID, int nr_nodes,
+                                      struct space *s, struct task *tasks,
+                                      int nr_tasks,
+                                      struct repartition_data *repartdata);
+
 int partition_space_to_space(double *oldh, double *oldcdim, int *oldnodeID,
                              struct space *s);
-void partition_init(struct partition *partition,
-                    enum repartition_type *reparttypestruct,
-                    const struct swift_params *params, int nr_nodes);
 
 #endif /* SWIFT_PARTITION_H */
