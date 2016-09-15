@@ -418,8 +418,8 @@ static void repart_edge_metis_accumulate(int partweights, struct task *tasks,
   float wtot = 0.0f;
 
   /* Initialise the repartdata struct, if not already done so. */
-  float *weights_v = NULL;
-  float *weights_e = NULL;
+  float *weights_v = repartdata->weights_v;
+  float *weights_e = repartdata->weights_e;
   if (repartdata->nr_cells == 0) {
 
     /* Allocate and init weights. */
@@ -664,11 +664,6 @@ static void repart_edge_metis(struct repartition_data *repartdata) {
   split_metis(repartdata->s, repartdata->nr_nodes, celllist);
 
   /* Clean up. */
-  if (repartdata->bothweights) {
-    free(repartdata->weights_v);
-  }
-  free(repartdata->weights_e);
-  repartdata->nr_cells = 0;
   free(celllist);
 }
 #endif
