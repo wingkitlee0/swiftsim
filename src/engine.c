@@ -619,16 +619,17 @@ void engine_repartition(struct engine *e) {
   ticks tic = getticks();
 
   /* Clear the repartition flag. */
-  enum repartition_type reparttype = e->forcerepart;
-  e->forcerepart = REPART_NONE;
+  e->forcerepart = 0;
 
   /* Nothing to do if only using a single node. Also avoids METIS
    * bug that doesn't handle this case well. */
   if (e->nr_nodes == 1) return;
 
   /* Do the repartitioning. */
-  partition_repartition(reparttype, e->nodeID, e->nr_nodes, e->s,
-                        e->sched.tasks, e->sched.nr_tasks);
+  partition_repartition(&e->repartdata);
+
+  /* Clear repartition data so we accumulate until next time. */
+  partition_repartition_clear(&e->repartdata);
 
   /* Now comes the tricky part: Exchange particles between all nodes.
      This is done in two steps, first allreducing a matrix of
@@ -2748,12 +2749,20 @@ void engine_step(struct engine *e) {
 
   /* Drift only the necessary particles, that all means all particles
    * if we are about to repartition. */
-  int repart = (e->forcerepart != REPART_NONE);
-  e->drift_all = repart || e->drift_all;
+  e->drift_all = e->forcerepart || e->drift_all;
   engine_drift(e);
 
   /* Re-distribute the particles amongst the nodes? */
-  if (repart) engine_repartition(e);
+  if (e->forcerepart) {
+    engine_repartition(e);
+  }
+  else if (e->reparttype != REPART_NONE) {
+
+    /* We accumulate the task weights. */
+    partition_repartition_accumulate(e->reparttype, e->nodeID, e->nr_nodes,
+                                     e->s, e->sched.tasks, e->sched.nr_tasks,
+                                     &e->repartdata);
+  }
 
   /* Prepare the space. */
   engine_prepare(e, e->drift_all);
@@ -3156,6 +3165,7 @@ void engine_unpin() {
  * @param with_aff use processor affinity, if supported.
  * @param policy The queuing policy to use.
  * @param verbose Is this #engine talkative ?
+ * @param reparttype Type of repartitioning to use, if required.
  * @param internal_units The system of units used internally.
  * @param physical_constants The #phys_const used for this run.
  * @param hydro The #hydro_props used for this run.
@@ -3165,6 +3175,7 @@ void engine_unpin() {
 void engine_init(struct engine *e, struct space *s,
                  const struct swift_params *params, int nr_nodes, int nodeID,
                  int nr_threads, int with_aff, int policy, int verbose,
+                 enum repartition_type reparttype,
                  const struct UnitSystem *internal_units,
                  const struct phys_const *physical_constants,
                  const struct hydro_props *hydro,
@@ -3184,7 +3195,8 @@ void engine_init(struct engine *e, struct space *s,
   e->proxy_ind = NULL;
   e->nr_proxies = 0;
   e->forcerebuild = 1;
-  e->forcerepart = REPART_NONE;
+  e->forcerepart = 0;
+  e->reparttype = reparttype;
   e->links = NULL;
   e->nr_links = 0;
   e->timeBegin = parser_get_param_double(params, "TimeIntegration:time_begin");
@@ -3361,6 +3373,10 @@ void engine_init(struct engine *e, struct space *s,
       error("Failed to allocate memory for proxies.");
     bzero(e->proxies, sizeof(struct proxy) * engine_maxproxies);
     e->nr_proxies = 0;
+
+    /* Initialise the repartitioning struct. */
+    partition_repartition_init(&e->repartdata);
+
 #endif
   }
 

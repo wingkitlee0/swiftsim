@@ -183,7 +183,11 @@ struct engine {
 
   /* Force the engine to rebuild? */
   int forcerebuild;
-  enum repartition_type forcerepart;
+  int forcerepart;
+
+  /* Repartitioning data. */
+  enum repartition_type reparttype;
+  struct repartition_data repartdata;
 
   /* How many steps have we done with the same set of tasks? */
   int tasks_age;
@@ -209,6 +213,7 @@ struct engine {
 
   /* The (parsed) parameter file */
   const struct swift_params *parameter_file;
+
 };
 
 /* Function prototypes. */
@@ -219,6 +224,7 @@ void engine_dump_snapshot(struct engine *e);
 void engine_init(struct engine *e, struct space *s,
                  const struct swift_params *params, int nr_nodes, int nodeID,
                  int nr_threads, int with_aff, int policy, int verbose,
+                 enum repartition_type reparttype,
                  const struct UnitSystem *internal_units,
                  const struct phys_const *physical_constants,
                  const struct hydro_props *hydro,

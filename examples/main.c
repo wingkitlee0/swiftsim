@@ -296,9 +296,9 @@ int main(int argc, char *argv[]) {
 #endif
 
 /* Prepare the domain decomposition scheme */
+  enum repartition_type reparttype = REPART_NONE;
 #ifdef WITH_MPI
   struct partition initial_partition;
-  enum repartition_type reparttype;
   partition_init(&initial_partition, &reparttype, params, nr_nodes);
 
   /* Let's report what we did */
@@ -456,8 +456,8 @@ int main(int argc, char *argv[]) {
   if (myrank == 0) clocks_gettime(&tic);
   struct engine e;
   engine_init(&e, &s, params, nr_nodes, myrank, nr_threads, with_aff,
-              engine_policies, talking, &us, &prog_const, &hydro_properties,
-              &potential, &cooling_func);
+              engine_policies, talking, reparttype, &us, &prog_const,
+              &hydro_properties, &potential, &cooling_func);
   if (myrank == 0) {
     clocks_gettime(&toc);
     message("engine_init took %.3f %s.", clocks_diff(&tic, &toc),
@@ -515,7 +515,7 @@ int main(int argc, char *argv[]) {
 
 /* Repartition the space amongst the nodes? */
 #ifdef WITH_MPI
-    if (j % 100 == 2) e.forcerepart = reparttype;
+    if (j % 100 == 2) e.forcerepart = 1;
 #endif
 
     /* Reset timers */
