@@ -354,8 +354,9 @@ if test "$enable_opt" = "yes" ; then
        fi
    fi
 
-
    if test "$enable_vec" = "no"; then
+
+      # Add the flags that explicitely switch off vectorization
       if test "$ax_cv_c_compiler_vendor" = "intel"; then
       	 CFLAGS="$CFLAGS -no-vec -no-simd"
       	 AC_MSG_RESULT([disabled Intel vectorization])
@@ -369,6 +370,18 @@ if test "$enable_opt" = "yes" ; then
          AC_MSG_WARN([Do not know how to disable vectorization for this compiler])
       fi
    else
+      # Add the OpenMP SIMD flags if available
+      if test "$ax_cv_c_compiler_vendor" = "intel"; then
+      	 CFLAGS="$CFLAGS -qopenmp-simd"
+      elif test "$ax_cv_c_compiler_vendor" = "gnu"; then
+      	 CFLAGS="$CFLAGS -fopenmp-simd"
+      elif test "$ax_cv_c_compiler_vendor" = "clang"; then
+         CFLAGS="$CFLAGS -openmp-simd"
+      else
+         AC_MSG_WARN([Do not know how to disable vectorization for this compiler])
+      fi
+
+      # Define a macro to help use of intrinsics
       AC_DEFINE([WITH_VECTORIZATION],1,[Enable vectorization])
       HAVEVECTORIZATION=1
    fi
