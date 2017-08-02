@@ -64,6 +64,7 @@ enum task_types {
   task_type_grav_mesh,
   task_type_cooling,
   task_type_sourceterms,
+  task_type_logger,
   task_type_count
 } __attribute__((packed));
 
