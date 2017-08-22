@@ -39,7 +39,7 @@ def write_block(f, part_type, pos, vel, id, m=False, U=False, rho=False, hsml=Fa
 
     @param: vel | array-like
         - the array of particle velocities with shape (n_particles, 3)
-    
+
     @param: id | array-like
         - array of particle ids with shape (n_particles, 3)
 
