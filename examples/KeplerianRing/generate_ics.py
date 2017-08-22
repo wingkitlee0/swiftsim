@@ -22,6 +22,8 @@
 """
 
 import numpy as np
+import write_gadget as wg
+import h5py as h5
 from scipy.special import erfinv
 
 
@@ -128,7 +130,7 @@ def get_keplerian_velocity(r_i, theta_i, mass):
 
     @param: r_i | float / array-like
         - radial positions of the particles
-    
+
     @param: theta_i | float / array_like
         - polar angle of the particles
 
@@ -193,3 +195,52 @@ def generate_particles(n_particles, central_radius, standard_deviation, mass):
     v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
 
     return x_i, y_i, v_x_i, v_y_i
+
+
+def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, particle_mass):
+    """ Save the particle data to a GADGET .hdf5 file.
+        
+    @param: filename | string
+        - filename of the hdf5 file to save.
+        
+    @param: x_i | array-like
+        - x positions of the particles
+        
+    @param: y_i | array-like
+        - y positions of the particles
+
+    @param: v_x_i | array-like
+        - x velocities of the particles
+
+    @param: v_y_i | array-like
+        - y velocities of the particles
+
+    @param: particle_mass | float
+        - mass of the particles.
+
+    ---------------------------------------------------------------------------
+    """
+    n_particles = len(x_i)
+
+    positions = np.array([x_i, y_i, np.zeros_like(x_i)]).T
+    velocities = np.array([v_x_i, v_y_i, np.zeros_like(v_x_i)]).T
+    ids = np.arange(n_particles)
+
+    with h5.File(filename, "w") as handle:
+        wg.write_head(
+            handle,
+            [n_particles, 0, 0, 0, 0, 0],
+            [particle_mass, 0, 0, 0, 0, 0],
+            0,  # t
+            1,  # z
+        )
+
+        wg.write_block(
+            handle,
+            0,  # gas
+            positions,
+            velocities,
+            ids,
+        )
+
+    return
