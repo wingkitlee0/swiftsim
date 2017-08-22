@@ -244,3 +244,75 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, particle_mass):
         )
 
     return
+
+
+if __name__ == "__main__":
+    # Run in script mode!
+
+    import argparse as ap
+
+    PARSER = ap.ArgumentParser(description='Description of your program')
+
+    PARSER.add_argument(
+        '-m',
+        '--gravity_mass',
+        help='GM for your central point mass (default: 1000 simulation units)',
+        required=False,
+        default=1000
+    )
+    PARSER.add_argument(
+        '-f',
+        '--filename',
+        help='Output filename (default: initial_conditions.hdf5)',
+        required=False,
+        default="intial_conditions.hdf5"
+    )
+    PARSER.add_argument(
+        '-n',
+        '--nparts',
+        help='Total number of particles (default: 10000)',
+        required=False,
+        default=10000
+    )
+    PARSER.add_argument(
+        '-r',
+        '--centralradius',
+        help='Distance to centre of the gaussian from (0, 0) \
+             (i.e. the mean radius of the ring). \
+             (default: 10 simulation units)',
+        required=False,
+        default=10
+    )
+    PARSER.add_argument(
+        '-sd',
+        '--standarddev',
+        help='Standard deviation of the gaussian (i.e. the width of the\
+              gaussian) (default: 2.5 simulation units).',
+        required=False,
+        default=2.5
+    )
+    PARSER.add_argument(
+        '-pm',
+        '--particlemass',
+        help='Mass of the SPH particles (default: 10 simulation units).',
+        required=False,
+        default=2.5
+    )
+
+    ARGS = vars(PARSER.parse_args())
+
+    PARTICLES = generate_particles(
+        ARGS['nparts'],
+        ARGS['centralradius'],
+        ARGS['standarddev'],
+        ARGS['gravity_mass']
+    )
+
+    save_to_gadget(
+        ARGS['filename'],
+        PARTICLES[0],
+        PARTICLES[1],
+        PARTICLES[2],
+        PARTICLES[3],
+        ARGS['particlemass']
+    )
