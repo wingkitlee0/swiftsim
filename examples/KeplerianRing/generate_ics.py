@@ -199,13 +199,13 @@ def generate_particles(n_particles, central_radius, standard_deviation, mass):
 
 def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, particle_mass):
     """ Save the particle data to a GADGET .hdf5 file.
-        
+
     @param: filename | string
         - filename of the hdf5 file to save.
-        
+
     @param: x_i | array-like
         - x positions of the particles
-        
+
     @param: y_i | array-like
         - y positions of the particles
 
