@@ -41,6 +41,14 @@ $$
     \delta \theta_i = \left[2\pi\left( 1 - \frac{r_{i-1}}{r_i} \right)\right]~.
 $$
 
+### Inverse CDF of Gaussian
+
+We need:
+$$
+    f^{-1}(m_i) = r_i = r_{central} + \sqrt{2}\sigma \mathrm{erf}^{-1}(2m_i - 1),
+$$
+and thankfully scipy has an inverse error function built in.
+
 
 Implementation Details
 ----------------------

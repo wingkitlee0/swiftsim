@@ -22,6 +22,7 @@
 """
 
 import numpy as np
+from scipy.special import erfinv
 
 
 def inverse_gaussian(m_i, central_radius, standard_deviation):
@@ -43,9 +44,8 @@ def inverse_gaussian(m_i, central_radius, standard_deviation):
     @return: radius | float / array-like
         - the radius associated with m_i (see README for theory).
     """
-    norm = 1 / (standard_deviation * np.sqrt(2 * np.pi))
-    radius = central_radius + \
-             np.sqrt(np.log(norm / m_i) * 2 * standard_deviation**2)
+    error_function = erfinv(2 * m_i - 1)
+    radius = central_radius + standard_deviation * np.sqrt(2) * error_function
 
     return radius
 
@@ -62,7 +62,7 @@ def generate_m_i(n_particles):
     @return: m_i | numpy.array
         - the m_i that are used to generate the radii of each particle.
     """
-    m_i = (np.arange(n_particles) - 0.5) / n_particles
+    m_i = (np.arange(n_particles) + 0.5) / n_particles
 
     return m_i
 
@@ -82,12 +82,14 @@ def generate_theta_i(r_i, theta_initial=0.):
     @return: theta_i | numpy.array
         - angles associated with the particles in the plane.
     """
-    radii_fraction = r_i[1:] / r_i[:-1]
+    radii_fraction = r_i[:-1] / r_i[1:]
     d_theta_i = np.sqrt(2 * np.pi * (1 - radii_fraction))
 
-    # This is probably quite slow as it requires the above d_theta_i to be
-    # copied to insert just the initial 0...
-    theta_i = np.insert(d_theta_i, 0, 0.) + theta_initial
+    theta_i = np.empty_like(r_i)
+    theta_i[0] = theta_initial
+
+    for i in range(len(d_theta_i)):  # first is theta_initial
+        theta_i[i+1] = theta_i[i] + d_theta_i[i]
 
     return theta_i
 
@@ -101,7 +103,7 @@ def convert_polar_to_cartesian(r_i, theta_i):
         - the radii of the particles
 
     @param: theta_i | float / array-like
-        - the polar co-ordinate of the particles
+        - the polar angle co-ordinate of the particles
 
     ---------------------------------------------------------------------------
 
@@ -115,3 +117,50 @@ def convert_polar_to_cartesian(r_i, theta_i):
     y_i = r_i * np.sin(theta_i)
 
     return x_i, y_i
+
+
+def generate_particles(n_particles, central_radius, standard_deviation):
+    """
+    A quick wrapper function that generates the x and y co-ordinates of
+    particles in a keplerian ring.
+
+    @param: n_particles | int
+        - the number of particles in the ring
+    
+    @param: central_radius | float
+        - the radius around which the particles are arranged
+
+    @param: standard_deviation | float
+        - the standard deviation of the gaussian which determines how the
+          particles are arranged horizontally and vertically around the ring.
+
+    ---------------------------------------------------------------------------
+
+    @return: x_i | numpy.array
+        - the x co-ordinates of the particles in the ring
+
+    @return: y_i | numpy.array
+        - the y co-ordinates of the particles in the ring
+    """
+    m_i = generate_m_i(n_particles)
+    r_i = inverse_gaussian(m_i, central_radius, standard_deviation)
+    theta_i = generate_theta_i(r_i)
+
+    return convert_polar_to_cartesian(r_i, theta_i)
+
+
+if __name__ == "__main__":
+    # Check the particles are arrangd how we thought they were!
+    import matplotlib.pyplot as plt
+
+    x, y = generate_particles(10000, 10, 2.5)
+
+    fig = plt.figure(figsize=(6, 6))
+    ax = fig.add_subplot(111)
+
+    ax.scatter(x, y, s=1)
+    ax.set_xlim(-20, 20)
+    ax.set_ylim(-20, 20)
+
+    fig.show()
+    input()  # keep the figure alive
