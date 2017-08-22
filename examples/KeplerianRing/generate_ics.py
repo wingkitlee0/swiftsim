@@ -193,20 +193,3 @@ def generate_particles(n_particles, central_radius, standard_deviation, mass):
     v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
 
     return x_i, y_i, v_x_i, v_y_i
-
-
-if __name__ == "__main__":
-    # Check the particles are arrangd how we thought they were!
-    import matplotlib.pyplot as plt
-
-    x, y, vx, vy = generate_particles(100, 10, 2.5, 1000)
-
-    fig = plt.figure(figsize=(6, 6))
-    ax = fig.add_subplot(111)
-
-    ax.quiver(x, y, vx, vy)
-    ax.set_xlim(-20, 20)
-    ax.set_ylim(-20, 20)
-
-    fig.show()
-    input()  # keep the figure alive
