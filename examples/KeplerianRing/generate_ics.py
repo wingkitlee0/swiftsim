@@ -265,7 +265,7 @@ if __name__ == "__main__":
         '--filename',
         help='Output filename (default: initial_conditions.hdf5)',
         required=False,
-        default="intial_conditions.hdf5"
+        default="initial_conditions.hdf5"
     )
     PARSER.add_argument(
         '-n',

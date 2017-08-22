@@ -63,9 +63,9 @@ def write_block(f, part_type, pos, vel, id, m=False, U=False, rho=False, hsml=Fa
     n_particles = len(id)
 
     # Create datasets
-    positions = type.create_dataset("Coordinates", (n_particles, 3), data=pos)
-    velocities = type.create_dataset("Velocities", (n_particles, 3))
-    ids = type.create_dataset("ParticleIDs", (n_particles,))
+    positions = part_type.create_dataset("Coordinates", (n_particles, 3), data=pos)
+    velocities = part_type.create_dataset("Velocities", (n_particles, 3))
+    ids = part_type.create_dataset("ParticleIDs", (n_particles,))
 
     # Oh gosh this is very wasteful code but it *works*.
     if m: #.any()
