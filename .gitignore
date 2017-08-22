@@ -266,6 +266,9 @@ _minted*
 *.sympy
 sympy-plots-for-*.tex/
 
+# python
+*.pyc
+
 # todonotes
 *.tdo
 
