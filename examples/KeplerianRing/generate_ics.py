@@ -88,6 +88,8 @@ def generate_theta_i(r_i, theta_initial=0.):
     theta_i = np.empty_like(r_i)
     theta_i[0] = theta_initial
 
+    # Need to do this awful loop because each entry relies on the one before it.
+    # Unless someone knows how to do this in numpy.
     for i in range(len(d_theta_i)):  # first is theta_initial
         theta_i[i+1] = theta_i[i] + d_theta_i[i]
 
@@ -119,20 +121,55 @@ def convert_polar_to_cartesian(r_i, theta_i):
     return x_i, y_i
 
 
-def generate_particles(n_particles, central_radius, standard_deviation):
+def get_keplerian_velocity(r_i, theta_i, mass):
+    r"""
+    The keplerian velocity of the particles given their position in the ring.
+    Note that this is exactly in the direction of $\hat{theta}$.
+
+    @param: r_i | float / array-like
+        - radial positions of the particles
+    
+    @param: theta_i | float / array_like
+        - polar angle of the particles
+
+    @param: mass | float
+        - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
+          the central point particle that the keplerian ring rotates around.
+
+    ---------------------------------------------------------------------------
+
+    @return: v_x_i | numpy.array
+        - the velocity of particles in the x direction
+
+    @return: v_y_i | numpy.array
+        - the velocity of particles in the y direction.
+    """
+    force_modifier = np.sqrt(mass / r_i)
+
+    v_x_i = force_modifier * (-np.sin(theta_i))
+    v_y_i = force_modifier * (np.cos(theta_i))
+
+    return v_x_i, v_y_i
+
+
+def generate_particles(n_particles, central_radius, standard_deviation, mass):
     """
     A quick wrapper function that generates the x and y co-ordinates of
     particles in a keplerian ring.
 
     @param: n_particles | int
         - the number of particles in the ring
-    
+
     @param: central_radius | float
         - the radius around which the particles are arranged
 
     @param: standard_deviation | float
         - the standard deviation of the gaussian which determines how the
           particles are arranged horizontally and vertically around the ring.
+
+    @param: mass | float
+        - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
+          the central point particle that the keplerian ring rotates around.
 
     ---------------------------------------------------------------------------
 
@@ -141,24 +178,33 @@ def generate_particles(n_particles, central_radius, standard_deviation):
 
     @return: y_i | numpy.array
         - the y co-ordinates of the particles in the ring
+
+    @return: v_x_i | numpy.array
+        - the velocity of particles in the x direction
+
+    @return: v_y_i | numpy.array
+        - the velocity of particles in the y direction.
     """
     m_i = generate_m_i(n_particles)
     r_i = inverse_gaussian(m_i, central_radius, standard_deviation)
     theta_i = generate_theta_i(r_i)
 
-    return convert_polar_to_cartesian(r_i, theta_i)
+    x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
+    v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
+
+    return x_i, y_i, v_x_i, v_y_i
 
 
 if __name__ == "__main__":
     # Check the particles are arrangd how we thought they were!
     import matplotlib.pyplot as plt
 
-    x, y = generate_particles(10000, 10, 2.5)
+    x, y, vx, vy = generate_particles(100, 10, 2.5, 1000)
 
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111)
 
-    ax.scatter(x, y, s=1)
+    ax.quiver(x, y, vx, vy)
     ax.set_xlim(-20, 20)
     ax.set_ylim(-20, 20)
 
