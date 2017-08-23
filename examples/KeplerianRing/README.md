@@ -11,13 +11,21 @@ referenced above).
 
 The test uses:
 
-+ GM = 1000 for a central point mass
-+ r = 10 with sd = 2.5 gaussian distribution for particles
++ $GM = 1000$ for a central point mass
++ $r = 10$ with $\sigma = 2.5$ gaussian distribution for particles
 + 9745 particles
-+ c_s = 0.01 << v_\phi = 10.
++ $c_s = 0.01 \ll v_\phi = 10$.
 
 Please note that the initial condition generator **requires python3 rather than
 python2**.
+
+Initial Conditions Generation
+-----------------------------
+
+The initial condition generation is handled by ```generate_ics.py```, for which
+the options are available with
+
+    python3 generate_ics.py --help
 
 
 Theory
