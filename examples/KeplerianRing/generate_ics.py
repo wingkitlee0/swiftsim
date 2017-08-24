@@ -198,7 +198,7 @@ def generate_particles(n_particles, central_radius, standard_deviation, mass):
     return x_i, y_i, v_x_i, v_y_i, int_energy
 
 
-def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, mass, int_energy, hsml):
+def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, int_energy, pm, hsml):
     """ Save the particle data to a GADGET .hdf5 file.
 
     @param: filename | string
@@ -216,11 +216,11 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, mass, int_energy, hsml):
     @param: v_y_i | array-like
         - y velocities of the particles
 
-    @param: mass | float
-        - mass of the particles.
-
     @param: hsml | float
         - smoothing length of the particles.
+
+    @param: pm | float
+        - mass of the particles.
 
     ---------------------------------------------------------------------------
     """
@@ -235,12 +235,12 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, mass, int_energy, hsml):
             handle,
             boxsize=100.,
             flag_entropy=1,
-            np_total=[n_particles, 0, 0, 0, 0, 0],
-            np_total_hw=[0, 0, 0, 0, 0, 0],
-            other={"MassTable" : [mass, 0, 0, 0, 0, 0]}
+            np_total=np.array([n_particles, 0, 0, 0, 0, 0]),
+            np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
+            other={"MassTable" : np.array([pm, 0, 0, 0, 0, 0])}
         )
 
-        wg.write_runtime_params(
+        wg.write_runtime_pars(
             handle,
             periodic_boundary=1,
         )
@@ -260,7 +260,7 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, mass, int_energy, hsml):
             positions,
             velocities,
             ids,
-            mass=np.zeros(n_particles) + mass,
+            mass=np.zeros(n_particles) + pm,
             int_energy=int_energy,
             smoothing=np.zeros(n_particles) + hsml
         )
@@ -321,7 +321,7 @@ if __name__ == "__main__":
         default=2.5
     )
     PARSER.add_argument(
-        '-h',
+        '-hs',
         '--smoothing',
         help='Smoothing length of the SPH particles (default: 1.28 simulation units).',
         required=False,
@@ -331,10 +331,10 @@ if __name__ == "__main__":
     ARGS = vars(PARSER.parse_args())
 
     PARTICLES = generate_particles(
-        ARGS['nparts'],
-        ARGS['centralradius'],
-        ARGS['standarddev'],
-        ARGS['gravity_mass']
+        int(ARGS['nparts']),
+        float(ARGS['centralradius']),
+        float(ARGS['standarddev']),
+        float(ARGS['gravity_mass'])
     )
 
     save_to_gadget(
@@ -344,6 +344,6 @@ if __name__ == "__main__":
         PARTICLES[2],
         PARTICLES[3],
         PARTICLES[4],
-        ARGS['particlemass'],
-        ARGS['smoothng']
+        float(ARGS['particlemass']),
+        float(ARGS['smoothing'])
     )

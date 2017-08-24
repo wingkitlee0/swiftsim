@@ -44,7 +44,7 @@ $ import numpy as np
 #        np_total_hw=[0, 0, 0, 0, 0, 0]
 #    )
 #
-#    wg.write_runtime_params(
+#    wg.write_runtime_pars(
 #        f,
 #        periodic_boundary=1,
 #    )
@@ -116,7 +116,7 @@ def write_header(f, boxsize, flag_entropy, np_total, np_total_hw, other=False):
     # We'll first build a dictionary to iterate through.
 
     default_attributes = {
-        "Boxsize" : boxsize,
+        "BoxSize" : boxsize,
         "Flag_Entropy_ICs" : flag_entropy,
         "NumPart_Total" : np_total,
         "NumPart_Total_HighWord" : np_total_hw,
@@ -140,7 +140,7 @@ def write_header(f, boxsize, flag_entropy, np_total, np_total_hw, other=False):
     return
 
 
-def write_runtime_params(f, periodic_boundary, other=False):
+def write_runtime_pars(f, periodic_boundary, other=False):
     """ Writes the "RuntimeParams" section in the hdf5 file. The parameters in
         this function that are required are also required for SWIFT to function.
         If you wish to pass extra arguments into the runtime parameters you
@@ -158,14 +158,14 @@ def write_runtime_params(f, periodic_boundary, other=False):
 
         @param other | dictionary | optional
             - a dictionary with any other parameters that you wish to pass into
-              the RuntimeParams. They will be passed such that the key is the
+              the RuntimePars. They will be passed such that the key is the
               name of the attribute in the hdf5 file.
     """
 
     # First build the dictionary
 
     default_attributes = {
-        "PeriodicBoundaryConditions" : periodic_boundary,
+        "PeriodicBoundariesOn" : periodic_boundary,
     }
 
     if other:
@@ -173,7 +173,7 @@ def write_runtime_params(f, periodic_boundary, other=False):
     else:
         attributes = default_attributes
 
-    runtime = f.create_group("RuntimeParams")
+    runtime = f.create_group("RuntimePars")
 
     for name, value in attributes.items():
         runtime.attrs[name] = value
