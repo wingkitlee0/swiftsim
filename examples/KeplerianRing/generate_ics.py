@@ -262,6 +262,10 @@ def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
     """
     m_i = generate_m_i(n_particles)
     r_i = inverse_gaussian(m_i, central_radius, std_dev)
+    theta_i = generate_theta_i(r_i)
+
+    # We need to remove the start and end of the spiral. We can do that here.
+    r_i, theta_i = QSP_fix(r_i, theta_i)
 
     # We need to remove those that are too large or small and end up as noisy
     # neighbors and really disrupt the ring.
@@ -273,18 +277,14 @@ def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
 
     # Masked arrays.compressed() simply returns the non-masked data.
     r_i = np.ma.masked_array(r_i, mask).compressed()
-    n_particles = len(r_i)
+    theta_i = np.ma.masked_array(theta_i, mask).compressed()
 
     # Now we can continue again!
-
-    theta_i = generate_theta_i(r_i)
-
-    # We need to remove the start and end of the spiral. We can do that here.
-    r_i, theta_i = QSP_fix(r_i, theta_i)
 
     x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
     v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
 
+    n_particles = len(r_i)
     int_energy = np.zeros(n_particles) + int_e
 
     return x_i, y_i, v_x_i, v_y_i, int_energy
