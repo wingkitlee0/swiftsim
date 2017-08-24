@@ -193,11 +193,12 @@ def generate_particles(n_particles, central_radius, standard_deviation, mass):
 
     x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
     v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
+    int_energy = np.zeros(n_particles)
 
-    return x_i, y_i, v_x_i, v_y_i
+    return x_i, y_i, v_x_i, v_y_i, int_energy
 
 
-def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, particle_mass):
+def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, mass, int_energy, hsml):
     """ Save the particle data to a GADGET .hdf5 file.
 
     @param: filename | string
@@ -215,8 +216,11 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, particle_mass):
     @param: v_y_i | array-like
         - y velocities of the particles
 
-    @param: particle_mass | float
+    @param: mass | float
         - mass of the particles.
+
+    @param: hsml | float
+        - smoothing length of the particles.
 
     ---------------------------------------------------------------------------
     """
@@ -227,12 +231,27 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, particle_mass):
     ids = np.arange(n_particles)
 
     with h5.File(filename, "w") as handle:
-        wg.write_head(
+        wg.write_header(
             handle,
-            [n_particles, 0, 0, 0, 0, 0],
-            [particle_mass, 0, 0, 0, 0, 0],
-            0,  # t
-            1,  # z
+            boxsize=100.,
+            flag_entropy=1,
+            np_total=[n_particles, 0, 0, 0, 0, 0],
+            np_total_hw=[0, 0, 0, 0, 0, 0],
+            other={"MassTable" : [mass, 0, 0, 0, 0, 0]}
+        )
+
+        wg.write_runtime_params(
+            handle,
+            periodic_boundary=1,
+        )
+
+        wg.write_units(
+            handle,
+            current=1.,
+            length=3.0856776e21,
+            mass=1.9885e33,
+            temperature=1.,
+            time=1.,
         )
 
         wg.write_block(
@@ -241,6 +260,9 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, particle_mass):
             positions,
             velocities,
             ids,
+            mass=np.zeros(n_particles) + mass,
+            int_energy=int_energy,
+            smoothing=np.zeros(n_particles) + hsml
         )
 
     return
@@ -298,6 +320,13 @@ if __name__ == "__main__":
         required=False,
         default=2.5
     )
+    PARSER.add_argument(
+        '-h',
+        '--smoothing',
+        help='Smoothing length of the SPH particles (default: 1.28 simulation units).',
+        required=False,
+        default=1.28
+    )
 
     ARGS = vars(PARSER.parse_args())
 
@@ -314,5 +343,7 @@ if __name__ == "__main__":
         PARTICLES[1],
         PARTICLES[2],
         PARTICLES[3],
-        ARGS['particlemass']
+        PARTICLES[4],
+        ARGS['particlemass'],
+        ARGS['smoothng']
     )
