@@ -9,7 +9,7 @@ InternalUnitSystem:
 # Parameters governing the time integration
 TimeIntegration:
   time_begin: 0.    # The starting time of the simulation (in internal units).
-  time_end:   8.    # The end time of the simulation (in internal units).
+  time_end:   25.    # The end time of the simulation (in internal units).
   dt_min:     1e-6  # The minimal time-step size of the simulation (in internal units).
   dt_max:     1e-3  # The maximal time-step size of the simulation (in internal units).
 
@@ -17,7 +17,7 @@ TimeIntegration:
 Snapshots:
   basename:            keplerian_ring # Common part of the name of output files
   time_first:          0.        # Time of the first output (in internal units)
-  delta_time:          0.02      # Time difference between consecutive outputs (in internal units)
+  delta_time:          0.01      # Time difference between consecutive outputs (in internal units)
 
 # Parameters governing the conserved quantities statistics
 Statistics:
@@ -32,15 +32,15 @@ SPH:
 # Parameters related to the initial conditions
 InitialConditions:
   file_name:  initial_conditions.hdf5        # The file to read
-  shift_x:    50.                   # A shift to apply to all particles read from the ICs (in internal units).
-  shift_y:    50.
-  shift_z:    50.
+  shift_x:    100.                   # A shift to apply to all particles read from the ICs (in internal units).
+  shift_y:    100.
+  shift_z:    100.
 
 # External potential parameters
 PointMassPotential:
-  position_x:      50.     # location of external point mass in internal units
-  position_y:      50.     # here just take this to be the centre of the ring
-  position_z:      50.	
+  position_x:      100.     # location of external point mass in internal units
+  position_y:      100.     # here just take this to be the centre of the ring
+  position_z:      100.	
   mass:            1e10     # mass of external point mass in internal units
   timestep_mult:   0.03     # controls time step
 

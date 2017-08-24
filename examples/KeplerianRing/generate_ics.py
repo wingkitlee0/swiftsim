@@ -194,8 +194,23 @@ def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
     r_i = inverse_gaussian(m_i, central_radius, std_dev)
     theta_i = generate_theta_i(r_i)
 
-    x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
-    v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
+    # We need to remove those that are too large or small and end up as noisy
+    # neighbors and really disrupt the ring.
+
+    upper_bound = r_i > central_radius + 1.5 * std_dev
+    lower_bound = r_i < central_radius - 1.5 * std_dev
+
+    mask = np.logical_or(upper_bound, lower_bound)
+
+    # Masked arrays.compressed() simply returns the non-masked data.
+    r_i_masked = np.ma.masked_array(r_i, mask).compressed()
+    theta_i_masked = np.ma.masked_array(theta_i, mask).compressed()
+
+    n_particles = len(r_i_masked)
+
+    x_i, y_i = convert_polar_to_cartesian(r_i_masked, theta_i_masked)
+    v_x_i, v_y_i = get_keplerian_velocity(r_i_masked, theta_i_masked, mass)
+
     int_energy = np.zeros(n_particles) + int_e
 
     return x_i, y_i, v_x_i, v_y_i, int_energy
@@ -236,7 +251,7 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, int_energy, pm, hsml):
     with h5.File(filename, "w") as handle:
         wg.write_header(
             handle,
-            boxsize=100.,
+            boxsize=200.,
             flag_entropy=0,
             np_total=np.array([n_particles, 0, 0, 0, 0, 0]),
             np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
@@ -276,14 +291,20 @@ if __name__ == "__main__":
 
     import argparse as ap
 
-    PARSER = ap.ArgumentParser(description='Description of your program')
+    PARSER = ap.ArgumentParser(
+        description="""Initial conditions generator for the Keplerian Ring
+                       example. It has sensible defaults, but if you wish to
+                       play around this script can be configured using command
+                       line arguments. For more information on those, see
+                       below."""
+    )
 
     PARSER.add_argument(
         '-m',
         '--gravity_mass',
-        help='GM for your central point mass (default: 1000 simulation units)',
+        help='GM for your central point mass (default: 43009.7 simulation units)',
         required=False,
-        default=1000
+        default=43009.7
     )
     PARSER.add_argument(
         '-f',
@@ -295,7 +316,7 @@ if __name__ == "__main__":
     PARSER.add_argument(
         '-n',
         '--nparts',
-        help='Total number of particles (default: 10000)',
+        help='Total number of particles (default: 10000). This is approximate.',
         required=False,
         default=10000
     )
@@ -319,9 +340,9 @@ if __name__ == "__main__":
     PARSER.add_argument(
         '-pm',
         '--particlemass',
-        help='Mass of the SPH particles (default: 10 simulation units).',
+        help='Mass of the SPH particles (default: 1 simulation units).',
         required=False,
-        default=2.5
+        default=1
     )
     PARSER.add_argument(
         '-hs',
