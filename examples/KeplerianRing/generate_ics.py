@@ -154,6 +154,76 @@ def get_keplerian_velocity(r_i, theta_i, mass):
     return v_x_i, v_y_i
 
 
+def QSP_fix(r_i, theta_i):
+    """
+    The start and end of the disk will have the end of the spiral there. That
+    is no good and introduces some shear forces, so we need to move them to
+    concentric circles. We'll also add some extra particles on the final
+    'layer' of this giant onion to ensure that all of the circles are complete.
+
+    @param: r_i | numpy.array
+        - the original r_i generated from inverse_gaussian (and perhaps
+          afterwards masked).
+
+    @param: theta_i | numpy.array
+        - the original theta_i generated from generate_theta_i.
+
+    ---------------------------------------------------------------------------
+
+    @return r_i_fixed | numpy.array
+        - the fixed, concentric circle-like r_i. Note that these arrays do not
+          necessarily have the same length as the r_i, theta_i that are
+          passed in and you will have to re-calculate the number of particles
+          in the system.
+
+    @return theta_i_fixed | numpy.array
+        - the fixed, concentric circle-like theta_i
+    """
+
+    # Thankfully, the delta_thetas are not wrapped (i.e. they keep on going
+    # from 2 pi -- we need to split the arrays into 'circles' by splitting
+    # the theta_i array every 2 pi.
+
+    rotations = 1
+    circles = []
+
+    these_r_i = []
+    these_theta_i = []
+
+    for radius, theta in zip(r_i, theta_i):
+        if theta > rotations * 2 * np.pi:
+            circles.append([these_r_i, these_theta_i])
+            these_r_i = []
+            these_theta_i = []
+            rotations += 1
+
+        these_r_i.append(radius)
+        these_theta_i.append(theta)
+
+    # Now we need to do the averaging.
+    # We want to have all particles in each circle a fixed radius away from the
+    # centre, as well as having even spacing between each particle. The final
+    # ring may be a bit dodgy still, but we will see.
+    
+    r_i_fixed = []
+    theta_i_fixed = []
+
+    for circle in circles:
+        n_particles = len(circle[0])
+        radius = sum(circle[0]) / n_particles
+        theta_initial = circle[1][0]
+
+        theta_sep = 2 * np.pi / n_particles
+        
+        theta = [t * theta_sep for t in range(n_particles)]
+        radii = [radius] * n_particles
+
+        r_i_fixed += radii
+        theta_i_fixed += theta
+
+    return np.array(r_i_fixed), np.array(theta_i_fixed)
+
+
 def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
     """
     A quick wrapper function that generates the x and y co-ordinates of
@@ -192,7 +262,6 @@ def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
     """
     m_i = generate_m_i(n_particles)
     r_i = inverse_gaussian(m_i, central_radius, std_dev)
-    theta_i = generate_theta_i(r_i)
 
     # We need to remove those that are too large or small and end up as noisy
     # neighbors and really disrupt the ring.
@@ -203,13 +272,18 @@ def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
     mask = np.logical_or(upper_bound, lower_bound)
 
     # Masked arrays.compressed() simply returns the non-masked data.
-    r_i_masked = np.ma.masked_array(r_i, mask).compressed()
-    theta_i_masked = np.ma.masked_array(theta_i, mask).compressed()
+    r_i = np.ma.masked_array(r_i, mask).compressed()
+    n_particles = len(r_i)
 
-    n_particles = len(r_i_masked)
+    # Now we can continue again!
 
-    x_i, y_i = convert_polar_to_cartesian(r_i_masked, theta_i_masked)
-    v_x_i, v_y_i = get_keplerian_velocity(r_i_masked, theta_i_masked, mass)
+    theta_i = generate_theta_i(r_i)
+
+    # We need to remove the start and end of the spiral. We can do that here.
+    r_i, theta_i = QSP_fix(r_i, theta_i)
+
+    x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
+    v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
 
     int_energy = np.zeros(n_particles) + int_e
 
