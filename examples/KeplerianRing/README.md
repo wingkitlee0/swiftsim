@@ -82,9 +82,9 @@ Implementation Details
 Useful Information
 ------------------
 
-$G$ in cgs units is given by:
+$G$ in simulation units (by default using this yaml) is given by:
 $$
-    6.67428 \times 10^{-8} ~ \mathrm{cm}^3 (\mathrm{g} \cdot \mathrm{s}^2)^{-1}.
+    4.300970\times10^{-6}
 $$
 This is used to convert the mass of the central potential (used in the
 parameterfile) to the $GM$ required in the initial conditions generator.
