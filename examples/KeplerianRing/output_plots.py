@@ -36,30 +36,33 @@ import h5py as h5
 
 def load_data(filename):
     with h5.File(filename, "r") as file_handle:
-        return file_handle['PartType0']['Coordinates']
+        return file_handle['PartType0']['Coordinates'][...]
 
 
-def plot_single(number, ax, options=False):
-    filename = "keplerian_ring_{:04d}".format(number)
+def plot_single(number, options=False):
+    filename = "keplerian_ring_{:04d}.hdf5".format(number)
     coordinates = load_data(filename)
 
     if options:
-        ax.scatter(coordinates[:, 0], coordinates[:, 1] ,**options)
+        return plt.scatter(coordinates[:, 0], coordinates[:, 1] ,**options)
     else:
-        ax.scatter(coordinates[:, 0], coordinates[:, 1])
+        return plt.scatter(coordinates[:, 0], coordinates[:, 1])
 
-    return ax
 
 
 if __name__ == "__main__":
     my_plots = []
-    fig, ax = plt.subplots()
+    fig = plt.figure(figsize=(6,6))
 
-    for i in range(12):
-        my_plots.append(plot_single(i, ax))
-
-    ax.set_xlim(-100, 100)
-    ax.set_ylim(-100, 100)
+    i = 0
+    while True:
+        try:
+            my_plots.append([plot_single(i, {"s" : 0.1, "c" : "b"})])
+            plt.xlim(80, 120)
+            plt.ylim(80, 120)
+            i += 1
+        except OSError:
+            break
 
     anim = anim.ArtistAnimation(
         fig,
