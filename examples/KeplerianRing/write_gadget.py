@@ -120,6 +120,8 @@ def write_header(f, boxsize, flag_entropy, np_total, np_total_hw, other=False):
         "Flag_Entropy_ICs" : flag_entropy,
         "NumPart_Total" : np_total,
         "NumPart_Total_HighWord" : np_total_hw,
+        "NumFilesPerSnapshot" : 1,  # required for backwards compatibility
+        "NumPart_ThisFile" : np_total, # Also required for bw compatibility
     }
 
     if other:
@@ -133,7 +135,7 @@ def write_header(f, boxsize, flag_entropy, np_total, np_total_hw, other=False):
     # that is documented, so we are stuck doing this loop...
 
     for name, value in attributes.items():
-        header[name] = value
+        header.attrs[name] = value
 
     return
 
@@ -174,7 +176,7 @@ def write_runtime_params(f, periodic_boundary, other=False):
     runtime = f.create_group("RuntimeParams")
 
     for name, value in attributes.items():
-        runtime[name] = value
+        runtime.attrs[name] = value
 
     return
 
@@ -227,8 +229,8 @@ def write_units(f, current, length, mass, temperature, time, other=False):
 
     units = f.create_group("Units")
 
-    for name, value in attributes:
-        units[name] = value
+    for name, value in attributes.items():
+        units.attrs[name] = value
 
     return
 
@@ -300,7 +302,7 @@ def write_block(f, part_type, pos, vel, ids, mass, int_energy, smoothing, other=
 
     particles = f.create_group(f"PartType{part_type}")
 
-    for name, value in data:
+    for name, value in data.items():
         particles.create_dataset(name, data=value)
 
     return
