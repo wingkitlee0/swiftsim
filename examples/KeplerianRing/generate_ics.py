@@ -154,7 +154,7 @@ def get_keplerian_velocity(r_i, theta_i, mass):
     return v_x_i, v_y_i
 
 
-def generate_particles(n_particles, central_radius, standard_deviation, mass):
+def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
     """
     A quick wrapper function that generates the x and y co-ordinates of
     particles in a keplerian ring.
@@ -165,13 +165,16 @@ def generate_particles(n_particles, central_radius, standard_deviation, mass):
     @param: central_radius | float
         - the radius around which the particles are arranged
 
-    @param: standard_deviation | float
+    @param: std_dev | float
         - the standard deviation of the gaussian which determines how the
           particles are arranged horizontally and vertically around the ring.
 
     @param: mass | float
         - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
           the central point particle that the keplerian ring rotates around.
+
+    @param: int_e | float
+		- the internal energy of each individual particle.
 
     ---------------------------------------------------------------------------
 
@@ -188,12 +191,12 @@ def generate_particles(n_particles, central_radius, standard_deviation, mass):
         - the velocity of particles in the y direction.
     """
     m_i = generate_m_i(n_particles)
-    r_i = inverse_gaussian(m_i, central_radius, standard_deviation)
+    r_i = inverse_gaussian(m_i, central_radius, std_dev)
     theta_i = generate_theta_i(r_i)
 
     x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
     v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
-    int_energy = np.zeros(n_particles)
+    int_energy = np.zeros(n_particles) + int_e
 
     return x_i, y_i, v_x_i, v_y_i, int_energy
 
@@ -234,7 +237,7 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, int_energy, pm, hsml):
         wg.write_header(
             handle,
             boxsize=100.,
-            flag_entropy=1,
+            flag_entropy=0,
             np_total=np.array([n_particles, 0, 0, 0, 0, 0]),
             np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
             other={"MassTable" : np.array([pm, 0, 0, 0, 0, 0])}
@@ -251,7 +254,7 @@ def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, int_energy, pm, hsml):
             length=3.0856776e21,
             mass=1.9885e33,
             temperature=1.,
-            time=1.,
+            time=3.085678e16,
         )
 
         wg.write_block(
@@ -327,6 +330,13 @@ if __name__ == "__main__":
         required=False,
         default=1.28
     )
+    PARSER.add_argument(
+        '-ie',
+        '--internalenergy',
+        help='Internal energy of the SPH particles (default: 0.015 simulation units).',
+        required=False,
+        default=0.015
+    )
 
     ARGS = vars(PARSER.parse_args())
 
@@ -334,7 +344,8 @@ if __name__ == "__main__":
         int(ARGS['nparts']),
         float(ARGS['centralradius']),
         float(ARGS['standarddev']),
-        float(ARGS['gravity_mass'])
+        float(ARGS['gravity_mass']),
+		float(ARGS['internalenergy'])
     )
 
     save_to_gadget(
