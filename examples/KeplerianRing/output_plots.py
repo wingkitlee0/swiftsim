@@ -37,29 +37,32 @@ import h5py as h5
 def load_data(filename):
     with h5.File(filename, "r") as file_handle:
         coords = file_handle['PartType0']['Coordinates'][...]
-        time = file_handle['Header']['Time']
+        time = float(file_handle['Header'].attrs['Time'])
         return coords, time
 
+def rms(x):
+    return sum(x**2)
 
 def get_metadata(filename):
     """ The metadata should be extracted from the first snapshot. """
     with h5.File(filename, "r") as file_handle:
-        header = file_handle['Header'][...]
-        code = file_handle['Code'][...]
-        hydro = file_handle['HyrdoScheme'][...]
+        header = file_handle['Header']
+        code = file_handle['Code']
+        hydro = file_handle['HydroScheme']
 
         # we want to get the inner velocity of the ring.
         vel = file_handle['PartType0']['Velocities'][0]
         rad = file_handle['PartType0']['Coordinates'][0]
+        period = 2 * np.pi * rms(rad) / rms(vel)
+        
+        return_values = {
+            "header" : dict(header.attrs),
+            "code" : dict(code.attrs),
+            "period" : float(period),
+            "hydro" : dict(hydro.attrs)
+        }
 
-    period = 2 * np.pi * rad.sum() / vel
-
-    return {
-        "header" : header,
-        "code" : code,
-        "period" : period,
-        "hydro" : hydro
-    }
+    return return_values
         
 
 
@@ -71,14 +74,17 @@ def plot_single(number, metadata, options=False):
         time,
         time/metadata['period'],
     ))
-    plt.text(118, 81, "Code: {} {} | {} {} \nHydro {}\n $\eta$={}".format(
-        metadata['code']['Git Branch'],
-        metadata['code']['Git Revision'],
-        metadata['code']['Compiler Name'],
-        metadata['code']['Compiler Version'],
-        metadata['hydro']['Scheme'],
-        metadata['hydro']['Kernel eta'],
+    plt.text(81, 116, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
+        metadata['code']['Git Branch'].decode("utf-8"),
+        metadata['code']['Git Revision'].decode("utf-8"),
+        metadata['code']['Compiler Name'].decode("utf-8"),
+        metadata['code']['Compiler Version'].decode("utf-8"),
+        metadata['hydro']['Scheme'].decode("utf-8"),
+        metadata['hydro']['Kernel eta'][0],
     ))
+    plt.title("Keplerian Ring Test")
+    plt.xlabel("$x$ position")
+    plt.ylabel("$y$ position")
 
 
     if options:
@@ -90,12 +96,13 @@ def plot_single(number, metadata, options=False):
 
 if __name__ == "__main__":
     my_plots = []
-    fig = plt.figure(figsize=(6,6))
+    fig = plt.figure(figsize=(8, 8))
+    metadata = get_metadata("keplerian_ring_0000.hdf5")
 
     i = 0
     while True:
         try:
-            my_plots.append([plot_single(i, {"s" : 0.1, "c" : "b"})])
+            my_plots.append([plot_single(i, metadata, {"s" : 0.1, "c" : "b"})])
             plt.xlim(80, 120)
             plt.ylim(80, 120)
             i += 1
@@ -110,4 +117,4 @@ if __name__ == "__main__":
         blit=True,
     )
 
-    anim.save("keplerian_ring.mp4")
+    anim.save("keplerian_ring.mp4", dpi=int(2048/8))
