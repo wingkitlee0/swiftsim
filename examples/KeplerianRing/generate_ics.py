@@ -436,7 +436,7 @@ if __name__ == "__main__":
     ARGS = vars(PARSER.parse_args())
 
     PARTICLES = generate_particles(
-        int(ARGS['nparts']),
+        int(int(ARGS['nparts']) * 1.1),
         float(ARGS['centralradius']),
         float(ARGS['standarddev']),
         float(ARGS['gravity_mass']),
