@@ -33,16 +33,21 @@ import matplotlib.animation as anim
 import numpy as np
 import h5py as h5
 
+from tqdm import tqdm
 
-def load_data(filename):
-    print(f"Loading fata from {filename}")
+
+def load_data(filename, silent=True):
+    if not silent:
+        print(f"Loading data from {filename}")
     with h5.File(filename, "r") as file_handle:
         coords = file_handle['PartType0']['Coordinates'][...]
         time = float(file_handle['Header'].attrs['Time'])
         return coords, time
 
+
 def rms(x):
     return np.sqrt(sum(x**2))
+
 
 def get_metadata(filename):
     """ The metadata should be extracted from the first snapshot. """
@@ -77,10 +82,10 @@ def plot_single(number, scatter, text, metadata, ax, options=False):
             time/metadata['period'],
         )
     )
+
     scatter.set_data(coordinates[:, 0], coordinates[:, 1])
+
     return scatter,
-
-
 
 
 if __name__ == "__main__":
@@ -91,7 +96,8 @@ if __name__ == "__main__":
     metadata = get_metadata("keplerian_ring_0000.hdf5")
     n_particle = metadata['header']['NumPart_Total'][0]
 
-    i = 0
+    # Initial plot setup
+
     scatter, = ax.plot([0]*n_particle, [0]*n_particle, ms=0.5, marker="o", linestyle="")
     ax.set_xlim(80, 120)
     ax.set_ylim(80, 120)
@@ -100,6 +106,7 @@ if __name__ == "__main__":
         0,
         0/metadata['period'],
     ))
+
     ax.text(81, 116, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
         metadata['code']['Git Branch'].decode("utf-8"),
         metadata['code']['Git Revision'].decode("utf-8"),
@@ -112,6 +119,8 @@ if __name__ == "__main__":
     ax.set_xlabel("$x$ position")
     ax.set_ylabel("$y$ position")
 
+    # Look for the number of files in the directory.
+    i = 0
     while True:
         if os.path.isfile("keplerian_ring_{:04d}.hdf5".format(i)):
             i += 1
@@ -125,7 +134,7 @@ if __name__ == "__main__":
     anim = anim.FuncAnimation(
         fig,
         plot_single,
-        np.arange(i),
+        tqdm(np.arange(i)),
         fargs = [
             scatter,
             time_text,
