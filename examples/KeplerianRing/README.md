@@ -11,10 +11,11 @@ referenced above).
 
 The test uses:
 
-+ $GM = 1000$ for a central point mass
++ $M = 10^10$ for a central point mass
 + $r = 10$ with $\sigma = 2.5$ gaussian distribution for particles
-+ 9745 particles
-+ $c_s = 0.01 \ll v_\phi = 10$.
++ Approximately 10000 particles
++ $c_s = 0.01 \ll v_\phi = 10$, enforced by giving them a mass of 1 unit and an
+  internal energy of 0.015.
 
 Please note that the initial condition generator **requires python3 rather than
 python2**.
@@ -39,6 +40,25 @@ The initial condition generation is handled by ```generate_ics.py```, for which
 the options are available with
 
     python3 generate_ics.py --help
+
+however the defaults are very sensible. If you wish to change the central mass,
+you will need to change the external point mass in ```keplerian_ring.yml``` as
+well.
+
+
+Plotting
+--------
+
+Once you have ran swift (we suggest that you use the following)
+
+    ../swift -g -S -s -t 16 keplerian_ring.yml 2>&1 | tee output.log
+
+there will be around 350 ```.hdf5``` files in your directory. To check out
+the results of the example as a movie, you can run
+
+    python3 output_plots.py
+
+which will produce a movie ```keplerian_ring.mp4``` in the directory.
 
 
 Theory
