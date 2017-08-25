@@ -36,12 +36,50 @@ import h5py as h5
 
 def load_data(filename):
     with h5.File(filename, "r") as file_handle:
-        return file_handle['PartType0']['Coordinates'][...]
+        coords = file_handle['PartType0']['Coordinates'][...]
+        time = file_handle['Header']['Time']
+        return coords, time
 
 
-def plot_single(number, options=False):
+def get_metadata(filename):
+    """ The metadata should be extracted from the first snapshot. """
+    with h5.File(filename, "r") as file_handle:
+        header = file_handle['Header'][...]
+        code = file_handle['Code'][...]
+        hydro = file_handle['HyrdoScheme'][...]
+
+        # we want to get the inner velocity of the ring.
+        vel = file_handle['PartType0']['Velocities'][0]
+        rad = file_handle['PartType0']['Coordinates'][0]
+
+    period = 2 * np.pi * rad.sum() / vel
+
+    return {
+        "header" : header,
+        "code" : code,
+        "period" : period,
+        "hydro" : hydro
+    }
+        
+
+
+def plot_single(number, metadata, options=False):
     filename = "keplerian_ring_{:04d}.hdf5".format(number)
-    coordinates = load_data(filename)
+    coordinates, time = load_data(filename)
+
+    plt.text(81, 81, "Time: {:1.2f} | Rotations {:1.2f}".format(
+        time,
+        time/metadata['period'],
+    ))
+    plt.text(118, 81, "Code: {} {} | {} {} \nHydro {}\n $\eta$={}".format(
+        metadata['code']['Git Branch'],
+        metadata['code']['Git Revision'],
+        metadata['code']['Compiler Name'],
+        metadata['code']['Compiler Version'],
+        metadata['hydro']['Scheme'],
+        metadata['hydro']['Kernel eta'],
+    ))
+
 
     if options:
         return plt.scatter(coordinates[:, 0], coordinates[:, 1] ,**options)
