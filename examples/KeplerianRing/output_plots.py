@@ -35,13 +35,14 @@ import h5py as h5
 
 
 def load_data(filename):
+    print(f"Loading fata from {filename}")
     with h5.File(filename, "r") as file_handle:
         coords = file_handle['PartType0']['Coordinates'][...]
         time = float(file_handle['Header'].attrs['Time'])
         return coords, time
 
 def rms(x):
-    return sum(x**2)
+    return np.sqrt(sum(x**2))
 
 def get_metadata(filename):
     """ The metadata should be extracted from the first snapshot. """
@@ -53,8 +54,8 @@ def get_metadata(filename):
         # we want to get the inner velocity of the ring.
         vel = file_handle['PartType0']['Velocities'][0]
         rad = file_handle['PartType0']['Coordinates'][0]
-        period = 2 * np.pi * rms(rad) / rms(vel)
-        
+        period = 2 * np.pi * rms(rad-100) / rms(vel)
+
         return_values = {
             "header" : dict(header.attrs),
             "code" : dict(code.attrs),
@@ -66,15 +67,40 @@ def get_metadata(filename):
         
 
 
-def plot_single(number, metadata, options=False):
+def plot_single(number, scatter, text, metadata, ax, options=False):
     filename = "keplerian_ring_{:04d}.hdf5".format(number)
     coordinates, time = load_data(filename)
 
-    plt.text(81, 81, "Time: {:1.2f} | Rotations {:1.2f}".format(
-        time,
-        time/metadata['period'],
+    text.set_text(
+        "Time: {:1.2f} | Rotations {:1.2f}".format(
+            time,
+            time/metadata['period'],
+        )
+    )
+    scatter.set_data(coordinates[:, 0], coordinates[:, 1])
+    return scatter,
+
+
+
+
+if __name__ == "__main__":
+    import os
+
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111)
+    metadata = get_metadata("keplerian_ring_0000.hdf5")
+    n_particle = metadata['header']['NumPart_Total'][0]
+
+    i = 0
+    scatter, = ax.plot([0]*n_particle, [0]*n_particle, ms=0.5, marker="o", linestyle="")
+    ax.set_xlim(80, 120)
+    ax.set_ylim(80, 120)
+
+    time_text = ax.text(81, 81, "Time: {:1.2f} | Rotations {:1.2f}".format(
+        0,
+        0/metadata['period'],
     ))
-    plt.text(81, 116, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
+    ax.text(81, 116, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
         metadata['code']['Git Branch'].decode("utf-8"),
         metadata['code']['Git Revision'].decode("utf-8"),
         metadata['code']['Compiler Name'].decode("utf-8"),
@@ -82,39 +108,33 @@ def plot_single(number, metadata, options=False):
         metadata['hydro']['Scheme'].decode("utf-8"),
         metadata['hydro']['Kernel eta'][0],
     ))
-    plt.title("Keplerian Ring Test")
-    plt.xlabel("$x$ position")
-    plt.ylabel("$y$ position")
+    ax.set_title("Keplerian Ring Test")
+    ax.set_xlabel("$x$ position")
+    ax.set_ylabel("$y$ position")
 
-
-    if options:
-        return plt.scatter(coordinates[:, 0], coordinates[:, 1] ,**options)
-    else:
-        return plt.scatter(coordinates[:, 0], coordinates[:, 1])
-
-
-
-if __name__ == "__main__":
-    my_plots = []
-    fig = plt.figure(figsize=(8, 8))
-    metadata = get_metadata("keplerian_ring_0000.hdf5")
-
-    i = 0
     while True:
-        try:
-            my_plots.append([plot_single(i, metadata, {"s" : 0.1, "c" : "b"})])
-            plt.xlim(80, 120)
-            plt.ylim(80, 120)
+        if os.path.isfile("keplerian_ring_{:04d}.hdf5".format(i)):
             i += 1
-        except OSError:
+        else:
             break
 
-    anim = anim.ArtistAnimation(
+        if i > 10000:
+            break
+
+    
+    anim = anim.FuncAnimation(
         fig,
-        my_plots,
+        plot_single,
+        np.arange(i),
+        fargs = [
+            scatter,
+            time_text,
+            metadata,
+            ax,
+        ],
         interval=50,
         repeat_delay=3000,
         blit=True,
     )
 
-    anim.save("keplerian_ring.mp4", dpi=int(2048/8))
+    anim.save("keplerian_ring.mp4", dpi=int(640/8))
