@@ -84,7 +84,7 @@ __attribute__((always_inline)) INLINE static float external_gravity_timestep(
       factor = (8.16 / (rinv2)) - 1.f + r / 0.35;
   } else if (rinv < 0.476) {
       // r > 2.1
-      const float factor = 1.f + (r - 2.1) / 0.1;
+      factor = 1.f + (r - 2.1) / 0.1;
   } else {
       // 0.35 > r > 2.1
       factor = 1.f;
