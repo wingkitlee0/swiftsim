@@ -71,18 +71,35 @@ __attribute__((always_inline)) INLINE static float external_gravity_timestep(
   const float dx = g->x[0] - potential->x;
   const float dy = g->x[1] - potential->y;
   const float dz = g->x[2] - potential->z;
-  const float rinv = 1.f / sqrtf(dx * dx + dy * dy + dz * dz);
+  const float r = sqrtf(dx * dx + dy * dy + dz * dz);
+  const float rinv = 1.f / r; 
   const float rinv2 = rinv * rinv;
   const float rinv3 = rinv2 * rinv;
   const float drdv = (g->x[0] - potential->x) * (g->v_full[0]) +
                      (g->x[1] - potential->y) * (g->v_full[1]) +
                      (g->x[2] - potential->z) * (g->v_full[2]);
+  float factor = 1.f;
+  if (rinv > 2.85) {
+      // r < 0.35
+      factor = (8.16 / (rinv2)) - 1.f + r / 0.35;
+  } else if (rinv < 0.476) {
+      // r > 2.1
+      const float factor = 1.f + (r - 2.1) / 0.1;
+  } else {
+      // 0.35 > r > 2.1
+      factor = 1.f;
+  }
+
   const float dota_x = G_newton * potential->mass * rinv3 *
-                       (-g->v_full[0] + 3.f * rinv2 * drdv * dx);
+                       (-g->v_full[0] + 3.f * rinv2 * drdv * dx) *
+                       factor;
   const float dota_y = G_newton * potential->mass * rinv3 *
-                       (-g->v_full[1] + 3.f * rinv2 * drdv * dy);
+                       (-g->v_full[1] + 3.f * rinv2 * drdv * dy) *
+                       factor;
   const float dota_z = G_newton * potential->mass * rinv3 *
-                       (-g->v_full[2] + 3.f * rinv2 * drdv * dz);
+                       (-g->v_full[2] + 3.f * rinv2 * drdv * dz) *
+                       factor;
+
   const float dota_2 = dota_x * dota_x + dota_y * dota_y + dota_z * dota_z;
   const float a_2 = g->a_grav[0] * g->a_grav[0] + g->a_grav[1] * g->a_grav[1] +
                     g->a_grav[2] * g->a_grav[2];
