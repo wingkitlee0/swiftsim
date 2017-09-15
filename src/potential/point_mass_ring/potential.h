@@ -58,7 +58,7 @@ struct external_potential {
  * We pass in the time for simulations where the potential evolves with time.
  *
  * @param time The current time.
- * @param potential The properties of the externa potential.
+ * @param potential The properties of the external potential.
  * @param phys_const The physical constants in internal units.
  * @param g Pointer to the g-particle data.
  */
@@ -78,16 +78,20 @@ __attribute__((always_inline)) INLINE static float external_gravity_timestep(
   const float drdv = (g->x[0] - potential->x) * (g->v_full[0]) +
                      (g->x[1] - potential->y) * (g->v_full[1]) +
                      (g->x[2] - potential->z) * (g->v_full[2]);
-  float factor = 1.f;
-  if (rinv > 2.85) {
-      // r < 0.35
-      factor = (8.16 / (rinv2)) - 1.f + r / 0.35;
-  } else if (rinv < 0.476) {
-      // r > 2.1
-      factor = 1.f + (r - 2.1) / 0.1;
+  float factor;
+
+  if (r < 0.175) {
+    // We need to flatten gravity as in SWIFT the timestepping is different
+    // than in GIZMO. This causes particles to become trapped close to the
+    // central point mass!
+    factor = 0.;
+  } else if (r < 0.35) {
+    factor = (8.16 * r * r) + 1.f - r / 0.35;
+  } else if (r > 2.1) {
+    factor = 1.f + (r - 2.1) / 0.1;
   } else {
-      // 0.35 > r > 2.1
-      factor = 1.f;
+    // 0.35 > r > 2.1
+    factor = 1.f;
   }
 
   const float dota_x = G_newton * potential->mass * rinv3 *
@@ -131,12 +135,31 @@ __attribute__((always_inline)) INLINE static void external_gravity_acceleration(
   const float dx = g->x[0] - potential->x;
   const float dy = g->x[1] - potential->y;
   const float dz = g->x[2] - potential->z;
-  const float rinv = 1.f / sqrtf(dx * dx + dy * dy + dz * dz);
-  const float rinv3 = rinv * rinv * rinv;
+  const float r = sqrtf(dx * dx + dy * dy + dz * dz);
+  const float rinv = 1.f / r;
+  const float rinv2 = rinv * rinv;
+  const float rinv3 = rinv * rinv2;
+  float factor = 1.f;
+ 
+  if (r < 0.175) {
+    // We need to flatten gravity as in SWIFT the timestepping is different
+    // than in GIZMO. This causes particles to become trapped close to the
+    // central point mass!
+    factor = 0.;
+    printf("Help me, I'm trapped! (r = %f id = %lld)\n", r, g->id_or_neg_offset);
+  } else if (r < 0.35) {
+    factor = (8.16 * r * r) + 1.f - r / 0.35;
+    printf("Factor is %f, r is %f \n", factor, r);
+  } else if (r > 2.1) {
+    factor = 1.f + (r - 2.1) / 0.1;
+  } else {
+    // 0.35 > r > 2.1
+    factor = 1.f;
+  }
 
-  g->a_grav[0] += -potential->mass * dx * rinv3;
-  g->a_grav[1] += -potential->mass * dy * rinv3;
-  g->a_grav[2] += -potential->mass * dz * rinv3;
+  g->a_grav[0] += -potential->mass * dx * rinv3 * factor;
+  g->a_grav[1] += -potential->mass * dy * rinv3 * factor;
+  g->a_grav[2] += -potential->mass * dz * rinv3 * factor;
 }
 
 /**
