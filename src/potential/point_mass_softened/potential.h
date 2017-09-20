@@ -2,6 +2,7 @@
  * This file is part of SWIFT.
  * Copyright (c) 2016 Tom Theuns (tom.theuns@durham.ac.uk)
  *                    Matthieu Schaller (matthieu.schaller@durham.ac.uk)
+ *                    Josh Borrow (joshua.borrow@durham.ac.uk)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -37,6 +38,14 @@
 
 /**
  * @brief External Potential Properties - Point mass case
+ *
+ * This file contains the softened central potential. This has a 'softening
+ * factor' that prevents the potential from becoming singular at the centre
+ * of the potential, i.e. it has the form
+ *
+ * $$ \phi \propto 1/(r^2 + \eta^2) $$
+ *
+ * where $\eta$ is some small value.
  */
 struct external_potential {
 
@@ -48,6 +57,9 @@ struct external_potential {
 
   /*! Time-step condition pre-factor */
   float timestep_mult;
+
+  /*! Potential softening */
+  float softening;
 };
 
 /**
@@ -65,22 +77,35 @@ __attribute__((always_inline)) INLINE static float external_gravity_timestep(
     const struct phys_const* restrict phys_const,
     const struct gpart* restrict g) {
 
-  const float G_newton = phys_const->const_newton_G;
   const float dx = g->x[0] - potential->x;
   const float dy = g->x[1] - potential->y;
   const float dz = g->x[2] - potential->z;
-  const float rinv = 1.f / sqrtf(dx * dx + dy * dy + dz * dz);
-  const float rinv2 = rinv * rinv;
-  const float rinv3 = rinv2 * rinv;
-  const float drdv = (g->x[0] - potential->x) * (g->v_full[0]) +
-                     (g->x[1] - potential->y) * (g->v_full[1]) +
-                     (g->x[2] - potential->z) * (g->v_full[2]);
-  const float dota_x = G_newton * potential->mass * rinv3 *
-                       (-g->v_full[0] + 3.f * rinv2 * drdv * dx);
-  const float dota_y = G_newton * potential->mass * rinv3 *
-                       (-g->v_full[1] + 3.f * rinv2 * drdv * dy);
-  const float dota_z = G_newton * potential->mass * rinv3 *
-                       (-g->v_full[2] + 3.f * rinv2 * drdv * dz);
+
+  const float softening2 = potential->softening * potential->softening;
+  const float r2 = dx * dx + dy * dy + dz * dz;
+  const float rinv = 1.f / sqrtf(r2);
+  const float rinv2_softened = 1.f / (r2 + softening2);
+
+  /* G * M / (r^2 + eta^2)^{3/2} */
+  const float GMr32 = phys_const->const_newton_G * potential->mass *
+                      sqrtf(rinv2_softened * rinv2_softened * rinv2_softened);
+
+  /* This is actually dr dot v */
+  const float drdv = (dx) * (g->v_full[0]) +
+                     (dy) * (g->v_full[1]) +
+                     (dz) * (g->v_full[2]);
+  
+  /* We want da/dt */
+  /* da/dt = -GM/(r^2 + \eta^2)^{3/2}  * 
+   *         (\vec{v} - 3 \vec{r} \cdot \vec{v} \hat{r} /
+   *         (r^2 + \eta^2)) */
+  const float dota_x = GMr32 * (3.f * drdv * dx * rinv2_softened * rinv -
+                                g->v_full[0]);
+  const float dota_y = GMr32 * (3.f * drdv * dy * rinv2_softened * rinv -
+                                g->v_full[0]);
+  const float dota_z = GMr32 * (3.f * drdv * dz * rinv2_softened * rinv -
+                                g->v_full[0]);
+
   const float dota_2 = dota_x * dota_x + dota_y * dota_y + dota_z * dota_z;
   const float a_2 = g->a_grav[0] * g->a_grav[0] + g->a_grav[1] * g->a_grav[1] +
                     g->a_grav[2] * g->a_grav[2];
@@ -112,7 +137,10 @@ __attribute__((always_inline)) INLINE static void external_gravity_acceleration(
   const float dx = g->x[0] - potential->x;
   const float dy = g->x[1] - potential->y;
   const float dz = g->x[2] - potential->z;
-  const float rinv = 1.f / sqrtf(dx * dx + dy * dy + dz * dz);
+  const float rinv = 1.f / sqrtf(dx * dx +
+                                 dy * dy +
+                                 dz * dz +
+                                 potential->softening * potential->softening);
   const float rinv3 = rinv * rinv * rinv;
 
   g->a_grav[0] += -potential->mass * dx * rinv3;
@@ -137,7 +165,11 @@ external_gravity_get_potential_energy(
   const float dx = g->x[0] - potential->x;
   const float dy = g->x[1] - potential->y;
   const float dz = g->x[2] - potential->z;
-  const float rinv = 1. / sqrtf(dx * dx + dy * dy + dz * dz);
+  const float rinv = 1. / sqrtf(dx * dx +
+                                dy * dy +
+                                dz * dz +
+                                potential->softening * potential->softening);
+
   return -phys_const->const_newton_G * potential->mass * rinv;
 }
 
@@ -166,6 +198,8 @@ static INLINE void potential_init_backend(
       parser_get_param_double(parameter_file, "PointMassPotential:mass");
   potential->timestep_mult = parser_get_param_float(
       parameter_file, "PointMassPotential:timestep_mult");
+  potential->softening = parser_get_param_float(
+      parameter_file, "PointMassPotential:softening");
 }
 
 /**
@@ -178,9 +212,9 @@ static INLINE void potential_print_backend(
 
   message(
       "External potential is 'Point mass' with properties (x,y,z) = (%e, %e, "
-      "%e), M = %e timestep multiplier = %e.",
+      "%e), M = %e timestep multiplier = %e, softening = %e.",
       potential->x, potential->y, potential->z, potential->mass,
-      potential->timestep_mult);
+      potential->timestep_mult, potential->softening);
 }
 
 #endif /* SWIFT_POTENTIAL_POINT_MASS_H */
