@@ -16,13 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
+#include "../config.h"
 
-#include <stdlib.h>
+/* Some standard headers. */
 #include <string.h>
-#include "const.h"
-#include "dimension.h"
-#include "error.h"
-#include "tools.h"
+
+/* Local headers. */
+#include "swift.h"
 
 void setup_matrix(float A[3][3]) {
   A[0][0] = random_uniform(-1.0, 1.0);

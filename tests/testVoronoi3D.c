@@ -16,12 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
+#include "../config.h"
 
-#include <stdlib.h>
-#include "error.h"
+/* Local headers. */
 #include "hydro/Shadowswift/voronoi3d_algorithm.h"
-#include "part.h"
-#include "tools.h"
+#include "swift.h"
 
 /* Number of random generators to use in the first grid build test */
 #define TESTVORONOI3D_NUMCELL_RANDOM 100

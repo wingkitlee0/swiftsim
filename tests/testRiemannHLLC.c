@@ -16,11 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
+#include "../config.h"
 
+/* Some standard headers. */
 #include <string.h>
-#include "error.h"
+
+/* Local headers. */
 #include "riemann/riemann_hllc.h"
-#include "tools.h"
+#include "swift.h"
 
 int consistent_with_zero(float val) { return fabs(val) < 1.e-4; }
 
