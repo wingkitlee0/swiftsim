@@ -82,11 +82,14 @@ __attribute__((always_inline)) INLINE static void kernel_long_grav_force_eval(
   *W = term1 + term2;
 #else
 
-  const float arg = 2.f * u;
-  const float exp_arg = good_approx_expf(arg);
-  const float term = 1.f / (1.f + exp_arg);
+  const float x = 2.f * u;
+  const float exp_x = good_approx_expf(x);
+  const float alpha = 1.f / (1.f + exp_x);
 
-  *W = arg * exp_arg * term * term - exp_arg * term + 1.f;
+  /* We want 2*(x*alpha - x*alpha^2 - exp(x)*alpha + 1) */
+  *W = 1.f - alpha;
+  *W = *W * x - exp_x;
+  *W = *W * alpha + 1.f;
   *W *= 2.f;
 #endif
 }
