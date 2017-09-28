@@ -46,7 +46,7 @@
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_000(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_000(const float v[3]) {
 
   return 1.;
 }
@@ -60,7 +60,7 @@ __attribute__((always_inline)) INLINE static double X_000(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_100(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_100(const float v[3]) {
 
   return v[0];
 }
@@ -70,7 +70,7 @@ __attribute__((always_inline)) INLINE static double X_100(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_010(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_010(const float v[3]) {
 
   return v[1];
 }
@@ -80,7 +80,7 @@ __attribute__((always_inline)) INLINE static double X_010(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_001(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_001(const float v[3]) {
 
   return v[2];
 }
@@ -94,9 +94,9 @@ __attribute__((always_inline)) INLINE static double X_001(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_200(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_200(const float v[3]) {
 
-  return 0.5 * v[0] * v[0];
+  return 0.5f * v[0] * v[0];
 }
 
 /**
@@ -104,9 +104,9 @@ __attribute__((always_inline)) INLINE static double X_200(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_020(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_020(const float v[3]) {
 
-  return 0.5 * v[1] * v[1];
+  return 0.5f * v[1] * v[1];
 }
 
 /**
@@ -114,9 +114,9 @@ __attribute__((always_inline)) INLINE static double X_020(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_002(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_002(const float v[3]) {
 
-  return 0.5 * v[2] * v[2];
+  return 0.5f * v[2] * v[2];
 }
 
 /**
@@ -124,7 +124,7 @@ __attribute__((always_inline)) INLINE static double X_002(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_110(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_110(const float v[3]) {
 
   return v[0] * v[1];
 }
@@ -134,7 +134,7 @@ __attribute__((always_inline)) INLINE static double X_110(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_101(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_101(const float v[3]) {
 
   return v[0] * v[2];
 }
@@ -144,7 +144,7 @@ __attribute__((always_inline)) INLINE static double X_101(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_011(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_011(const float v[3]) {
 
   return v[1] * v[2];
 }
@@ -158,9 +158,9 @@ __attribute__((always_inline)) INLINE static double X_011(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_300(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_300(const float v[3]) {
 
-  return 0.1666666666666667 * v[0] * v[0] * v[0];
+  return 0.1666666666666667f * v[0] * v[0] * v[0];
 }
 
 /**
@@ -168,9 +168,9 @@ __attribute__((always_inline)) INLINE static double X_300(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_030(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_030(const float v[3]) {
 
-  return 0.1666666666666667 * v[1] * v[1] * v[1];
+  return 0.1666666666666667f * v[1] * v[1] * v[1];
 }
 
 /**
@@ -178,9 +178,9 @@ __attribute__((always_inline)) INLINE static double X_030(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_003(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_003(const float v[3]) {
 
-  return 0.1666666666666667 * v[2] * v[2] * v[2];
+  return 0.1666666666666667f * v[2] * v[2] * v[2];
 }
 
 /**
@@ -188,9 +188,9 @@ __attribute__((always_inline)) INLINE static double X_003(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_210(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_210(const float v[3]) {
 
-  return 0.5 * v[0] * v[0] * v[1];
+  return 0.5f * v[0] * v[0] * v[1];
 }
 
 /**
@@ -198,9 +198,9 @@ __attribute__((always_inline)) INLINE static double X_210(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_201(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_201(const float v[3]) {
 
-  return 0.5 * v[0] * v[0] * v[2];
+  return 0.5f * v[0] * v[0] * v[2];
 }
 
 /**
@@ -208,9 +208,9 @@ __attribute__((always_inline)) INLINE static double X_201(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_120(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_120(const float v[3]) {
 
-  return 0.5 * v[0] * v[1] * v[1];
+  return 0.5f * v[0] * v[1] * v[1];
 }
 
 /**
@@ -218,9 +218,9 @@ __attribute__((always_inline)) INLINE static double X_120(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_021(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_021(const float v[3]) {
 
-  return 0.5 * v[1] * v[1] * v[2];
+  return 0.5f * v[1] * v[1] * v[2];
 }
 
 /**
@@ -228,9 +228,9 @@ __attribute__((always_inline)) INLINE static double X_021(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_102(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_102(const float v[3]) {
 
-  return 0.5 * v[0] * v[2] * v[2];
+  return 0.5f * v[0] * v[2] * v[2];
 }
 
 /**
@@ -238,7 +238,7 @@ __attribute__((always_inline)) INLINE static double X_102(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_012(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_012(const float v[3]) {
 
   return 0.5 * v[1] * v[2] * v[2];
 }
@@ -248,7 +248,7 @@ __attribute__((always_inline)) INLINE static double X_012(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_111(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_111(const float v[3]) {
 
   return v[0] * v[1] * v[2];
 }
@@ -262,10 +262,10 @@ __attribute__((always_inline)) INLINE static double X_111(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_400(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_400(const float v[3]) {
 
-  const double vv = v[0] * v[0];
-  return 0.041666666666666667 * vv * vv;
+  const float vv = v[0] * v[0];
+  return 0.041666666666666667f * vv * vv;
 }
 
 /**
@@ -273,10 +273,10 @@ __attribute__((always_inline)) INLINE static double X_400(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_040(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_040(const float v[3]) {
 
-  const double vv = v[1] * v[1];
-  return 0.041666666666666667 * vv * vv;
+  const float vv = v[1] * v[1];
+  return 0.041666666666666667f * vv * vv;
 }
 
 /**
@@ -284,10 +284,10 @@ __attribute__((always_inline)) INLINE static double X_040(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_004(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_004(const float v[3]) {
 
-  const double vv = v[2] * v[2];
-  return 0.041666666666666667 * vv * vv;
+  const float vv = v[2] * v[2];
+  return 0.041666666666666667f * vv * vv;
 }
 
 /**
@@ -295,9 +295,9 @@ __attribute__((always_inline)) INLINE static double X_004(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_310(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_310(const float v[3]) {
 
-  return 0.1666666666666667 * v[0] * v[0] * v[0] * v[1];
+  return 0.1666666666666667f * v[0] * v[0] * v[0] * v[1];
 }
 
 /**
@@ -305,9 +305,9 @@ __attribute__((always_inline)) INLINE static double X_310(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_301(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_301(const float v[3]) {
 
-  return 0.1666666666666667 * v[0] * v[0] * v[0] * v[2];
+  return 0.1666666666666667f * v[0] * v[0] * v[0] * v[2];
 }
 
 /**
@@ -315,9 +315,9 @@ __attribute__((always_inline)) INLINE static double X_301(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_130(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_130(const float v[3]) {
 
-  return 0.1666666666666667 * v[0] * v[1] * v[1] * v[1];
+  return 0.1666666666666667f * v[0] * v[1] * v[1] * v[1];
 }
 
 /**
@@ -325,9 +325,9 @@ __attribute__((always_inline)) INLINE static double X_130(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_031(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_031(const float v[3]) {
 
-  return 0.1666666666666667 * v[1] * v[1] * v[1] * v[2];
+  return 0.1666666666666667f * v[1] * v[1] * v[1] * v[2];
 }
 
 /**
@@ -335,9 +335,9 @@ __attribute__((always_inline)) INLINE static double X_031(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_103(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_103(const float v[3]) {
 
-  return 0.1666666666666667 * v[0] * v[2] * v[2] * v[2];
+  return 0.1666666666666667f * v[0] * v[2] * v[2] * v[2];
 }
 
 /**
@@ -345,7 +345,7 @@ __attribute__((always_inline)) INLINE static double X_103(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_013(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_013(const float v[3]) {
 
   return 0.1666666666666667 * v[1] * v[2] * v[2] * v[2];
 }
@@ -355,9 +355,9 @@ __attribute__((always_inline)) INLINE static double X_013(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_220(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_220(const float v[3]) {
 
-  return 0.25 * v[0] * v[0] * v[1] * v[1];
+  return 0.25f * v[0] * v[0] * v[1] * v[1];
 }
 
 /**
@@ -365,9 +365,9 @@ __attribute__((always_inline)) INLINE static double X_220(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_202(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_202(const float v[3]) {
 
-  return 0.25 * v[0] * v[0] * v[2] * v[2];
+  return 0.25f * v[0] * v[0] * v[2] * v[2];
 }
 
 /**
@@ -375,9 +375,9 @@ __attribute__((always_inline)) INLINE static double X_202(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_022(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_022(const float v[3]) {
 
-  return 0.25 * v[1] * v[1] * v[2] * v[2];
+  return 0.25f * v[1] * v[1] * v[2] * v[2];
 }
 
 /**
@@ -385,9 +385,9 @@ __attribute__((always_inline)) INLINE static double X_022(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_211(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_211(const float v[3]) {
 
-  return 0.5 * v[0] * v[0] * v[1] * v[2];
+  return 0.5f * v[0] * v[0] * v[1] * v[2];
 }
 
 /**
@@ -395,9 +395,9 @@ __attribute__((always_inline)) INLINE static double X_211(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_121(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_121(const float v[3]) {
 
-  return 0.5 * v[0] * v[1] * v[1] * v[2];
+  return 0.5f * v[0] * v[1] * v[1] * v[2];
 }
 
 /**
@@ -405,9 +405,9 @@ __attribute__((always_inline)) INLINE static double X_121(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_112(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_112(const float v[3]) {
 
-  return 0.5 * v[0] * v[1] * v[2] * v[2];
+  return 0.5f * v[0] * v[1] * v[2] * v[2];
 }
 
 /***************************/
@@ -422,9 +422,11 @@ __attribute__((always_inline)) INLINE static double X_112(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_005(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_005(const float v[3]) {
 
-  return 8.333333333333333e-03 * v[2] * v[2] * v[2] * v[2] * v[2];
+  const float vv = v[2] * v[2];
+  const float vvvv = vv * vv;
+  return 8.333333333333333e-03f * vvvv * v[2];
 }
 
 /**
@@ -435,9 +437,11 @@ __attribute__((always_inline)) INLINE static double X_005(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_014(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_014(const float v[3]) {
 
-  return 4.166666666666666e-02 * v[1] * v[2] * v[2] * v[2] * v[2];
+  const float vv = v[2] * v[2];
+  const float vvvv = vv * vv;
+  return 4.166666666666666e-02f * v[1] * vvvv;
 }
 
 /**
@@ -448,9 +452,9 @@ __attribute__((always_inline)) INLINE static double X_014(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_023(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_023(const float v[3]) {
 
-  return 8.333333333333333e-02 * v[1] * v[1] * v[2] * v[2] * v[2];
+  return 8.333333333333333e-02f * v[1] * v[1] * v[2] * v[2] * v[2];
 }
 
 /**
@@ -461,9 +465,9 @@ __attribute__((always_inline)) INLINE static double X_023(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_032(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_032(const float v[3]) {
 
-  return 8.333333333333333e-02 * v[1] * v[1] * v[1] * v[2] * v[2];
+  return 8.333333333333333e-02f * v[1] * v[1] * v[1] * v[2] * v[2];
 }
 
 /**
@@ -474,9 +478,11 @@ __attribute__((always_inline)) INLINE static double X_032(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_041(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_041(const float v[3]) {
 
-  return 4.166666666666666e-02 * v[1] * v[1] * v[1] * v[1] * v[2];
+  const float vv = v[1] * v[1];
+  const float vvvv = vv * vv;
+  return 4.166666666666666e-02f * vvvv * v[2];
 }
 
 /**
@@ -487,9 +493,11 @@ __attribute__((always_inline)) INLINE static double X_041(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_050(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_050(const float v[3]) {
 
-  return 8.333333333333333e-03 * v[1] * v[1] * v[1] * v[1] * v[1];
+  const float vv = v[1] * v[1];
+  const float vvvv = vv * vv;
+  return 8.333333333333333e-03f * vvvv * v[1];
 }
 
 /**
@@ -500,9 +508,11 @@ __attribute__((always_inline)) INLINE static double X_050(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_104(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_104(const float v[3]) {
 
-  return 4.166666666666666e-02 * v[0] * v[2] * v[2] * v[2] * v[2];
+  const float vv = v[2] * v[2];
+  const float vvvv = vv * vv;
+  return 4.166666666666666e-02f * v[0] * vvvv;
 }
 
 /**
@@ -513,9 +523,9 @@ __attribute__((always_inline)) INLINE static double X_104(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_113(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_113(const float v[3]) {
 
-  return 1.666666666666667e-01 * v[0] * v[1] * v[2] * v[2] * v[2];
+  return 1.666666666666667e-01f * v[0] * v[1] * v[2] * v[2] * v[2];
 }
 
 /**
@@ -526,9 +536,9 @@ __attribute__((always_inline)) INLINE static double X_113(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_122(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_122(const float v[3]) {
 
-  return 2.500000000000000e-01 * v[0] * v[1] * v[1] * v[2] * v[2];
+  return 2.500000000000000e-01f * v[0] * v[1] * v[1] * v[2] * v[2];
 }
 
 /**
@@ -539,9 +549,9 @@ __attribute__((always_inline)) INLINE static double X_122(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_131(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_131(const float v[3]) {
 
-  return 1.666666666666667e-01 * v[0] * v[1] * v[1] * v[1] * v[2];
+  return 1.666666666666667e-01f * v[0] * v[1] * v[1] * v[1] * v[2];
 }
 
 /**
@@ -552,9 +562,11 @@ __attribute__((always_inline)) INLINE static double X_131(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_140(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_140(const float v[3]) {
 
-  return 4.166666666666666e-02 * v[0] * v[1] * v[1] * v[1] * v[1];
+  const float vv = v[1] * v[1];
+  const float vvvv = vv * vv;
+  return 4.166666666666666e-02f * v[0] * vvvv;
 }
 
 /**
@@ -565,9 +577,9 @@ __attribute__((always_inline)) INLINE static double X_140(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_203(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_203(const float v[3]) {
 
-  return 8.333333333333333e-02 * v[0] * v[0] * v[2] * v[2] * v[2];
+  return 8.333333333333333e-02f * v[0] * v[0] * v[2] * v[2] * v[2];
 }
 
 /**
@@ -578,9 +590,9 @@ __attribute__((always_inline)) INLINE static double X_203(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_212(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_212(const float v[3]) {
 
-  return 2.500000000000000e-01 * v[0] * v[0] * v[1] * v[2] * v[2];
+  return 2.500000000000000e-01f * v[0] * v[0] * v[1] * v[2] * v[2];
 }
 
 /**
@@ -591,9 +603,9 @@ __attribute__((always_inline)) INLINE static double X_212(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_221(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_221(const float v[3]) {
 
-  return 2.500000000000000e-01 * v[0] * v[0] * v[1] * v[1] * v[2];
+  return 2.500000000000000e-01f * v[0] * v[0] * v[1] * v[1] * v[2];
 }
 
 /**
@@ -604,9 +616,9 @@ __attribute__((always_inline)) INLINE static double X_221(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_230(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_230(const float v[3]) {
 
-  return 8.333333333333333e-02 * v[0] * v[0] * v[1] * v[1] * v[1];
+  return 8.333333333333333e-02f * v[0] * v[0] * v[1] * v[1] * v[1];
 }
 
 /**
@@ -617,9 +629,9 @@ __attribute__((always_inline)) INLINE static double X_230(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_302(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_302(const float v[3]) {
 
-  return 8.333333333333333e-02 * v[0] * v[0] * v[0] * v[2] * v[2];
+  return 8.333333333333333e-02f * v[0] * v[0] * v[0] * v[2] * v[2];
 }
 
 /**
@@ -630,9 +642,9 @@ __attribute__((always_inline)) INLINE static double X_302(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_311(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_311(const float v[3]) {
 
-  return 1.666666666666667e-01 * v[0] * v[0] * v[0] * v[1] * v[2];
+  return 1.666666666666667e-01f * v[0] * v[0] * v[0] * v[1] * v[2];
 }
 
 /**
@@ -643,9 +655,9 @@ __attribute__((always_inline)) INLINE static double X_311(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_320(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_320(const float v[3]) {
 
-  return 8.333333333333333e-02 * v[0] * v[0] * v[0] * v[1] * v[1];
+  return 8.333333333333333e-02f * v[0] * v[0] * v[0] * v[1] * v[1];
 }
 
 /**
@@ -656,9 +668,11 @@ __attribute__((always_inline)) INLINE static double X_320(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_401(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_401(const float v[3]) {
 
-  return 4.166666666666666e-02 * v[0] * v[0] * v[0] * v[0] * v[2];
+  const float vv = v[0] * v[0];
+  const float vvvv = vv * vv;
+  return 4.166666666666666e-02f * vvvv * v[2];
 }
 
 /**
@@ -669,9 +683,11 @@ __attribute__((always_inline)) INLINE static double X_401(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_410(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_410(const float v[3]) {
 
-  return 4.166666666666666e-02 * v[0] * v[0] * v[0] * v[0] * v[1];
+  const float vv = v[0] * v[0];
+  const float vvvv = vv * vv;
+  return 4.166666666666666e-02f * vvvv * v[1];
 }
 
 /**
@@ -682,9 +698,11 @@ __attribute__((always_inline)) INLINE static double X_410(const double v[3]) {
  *
  * @param v vector (\f$ v \f$).
  */
-__attribute__((always_inline)) INLINE static double X_500(const double v[3]) {
+__attribute__((always_inline)) INLINE static float X_500(const float v[3]) {
 
-  return 8.333333333333333e-03 * v[0] * v[0] * v[0] * v[0] * v[0];
+  const float vv = v[0] * v[0];
+  const float vvvv = vv * vv;
+  return 8.333333333333333e-03f * vvvv * v[0];
 }
 
 #endif /* SWIFT_VECTOR_POWER_H */

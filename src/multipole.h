@@ -1061,14 +1061,14 @@ INLINE static void gravity_P2M(struct gravity_tensors *multi,
   /* Construce the higher order terms */
   for (int k = 0; k < gcount; k++) {
 
-    const double dx[3] = {gparts[k].x[0] - com[0], gparts[k].x[1] - com[1],
-                          gparts[k].x[2] - com[2]};
+    const float dx[3] = {gparts[k].x[0] - com[0], gparts[k].x[1] - com[1],
+                         gparts[k].x[2] - com[2]};
 
     /* Maximal distance CoM<->gpart */
     r_max2 = max(r_max2, dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2]);
 
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 0
-    const double m = gparts[k].mass;
+    const float m = gparts[k].mass;
 
     /* 1st order terms */
     M_100 += -m * X_100(dx);
@@ -1271,8 +1271,8 @@ INLINE static void gravity_M2M(struct multipole *m_a,
   m_a->M_000 = m_b->M_000;
 
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 0
-  const double dx[3] = {pos_a[0] - pos_b[0], pos_a[1] - pos_b[1],
-                        pos_a[2] - pos_b[2]};
+  const float dx[3] = {pos_a[0] - pos_b[0], pos_a[1] - pos_b[1],
+                       pos_a[2] - pos_b[2]};
 
   /* Shift 1st order term */
   m_a->M_100 = 0.f; /* m_b->M_100 + X_100(dx) * m_b->M_000; */
@@ -1971,8 +1971,8 @@ INLINE static void gravity_L2L(struct grav_tensor *la,
 #endif
 
   /* Distance to shift by */
-  const double dx[3] = {pos_a[0] - pos_b[0], pos_a[1] - pos_b[1],
-                        pos_a[2] - pos_b[2]};
+  const float dx[3] = {pos_a[0] - pos_b[0], pos_a[1] - pos_b[1],
+                       pos_a[2] - pos_b[2]};
 
   /* Shift 0th order term */
   la->F_000 += X_000(dx) * lb->F_000;
@@ -2328,10 +2328,7 @@ INLINE static void gravity_L2P(const struct grav_tensor *lb,
   double pot = 0.;
 
   /* Distance to the multipole */
-  const double dx[3] = {gp->x[0] - loc[0], gp->x[1] - loc[1],
-                        gp->x[2] - loc[2]};
-  /* 0th order contributions */
-  pot -= X_000(dx) * lb->F_000;
+  const float dx[3] = {gp->x[0] - loc[0], gp->x[1] - loc[1], gp->x[2] - loc[2]};
 
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 0
   /* 1st order contributions */
@@ -2441,6 +2438,50 @@ INLINE static void gravity_L2P(const struct grav_tensor *lb,
   gp->a_grav[1] += a_grav[1];
   gp->a_grav[2] += a_grav[2];
   gp->potential += pot;
+}
+
+INLINE static void gravity_M2P(const struct multipole *ma,
+                               const struct gravity_props *props,
+                               const double loc[3], struct gpart *gp) {
+
+#if SELF_GRAVITY_MULTIPOLE_ORDER > 0
+
+  const float eps2 = props->epsilon2;
+  const float eps_inv = props->epsilon_inv;
+  const float eps_inv3 = props->epsilon_inv3;
+
+  /* Distance to the multipole */
+  const float dx = gp->x[0] - loc[0];
+  const float dy = gp->x[1] - loc[1];
+  const float dz = gp->x[2] - loc[2];
+  const float r2 = dx * dx + dy * dy + dz * dz;
+
+  /* Get the inverse distance */
+  const float r_inv = 1.f / sqrtf(r2);
+
+  float f, W;
+
+  if (r2 >= eps2) {
+
+    /* Get Newtonian gravity */
+    f = ma->M_000 * r_inv * r_inv * r_inv;
+
+  } else {
+
+    const float r = r2 * r_inv;
+    const float u = r * eps_inv;
+
+    kernel_grav_eval(u, &W);
+
+    /* Get softened gravity */
+    f = ma->M_000 * eps_inv3 * W;
+  }
+
+  gp->a_grav[0] -= f * dx;
+  gp->a_grav[1] -= f * dy;
+  gp->a_grav[2] -= f * dz;
+
+#endif
 }
 
 /**
