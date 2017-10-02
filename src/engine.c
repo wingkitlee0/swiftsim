@@ -66,6 +66,7 @@
 #include "gravity.h"
 #include "gravity_cache.h"
 #include "hydro.h"
+#include "logger_io.h"
 #include "map.h"
 #include "memswap.h"
 #include "minmax.h"
