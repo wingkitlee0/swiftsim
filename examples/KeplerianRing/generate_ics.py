@@ -224,20 +224,13 @@ def QSP_fix(r_i, theta_i):
     return np.array(r_i_fixed), np.array(theta_i_fixed)
 
 
-def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
+def generate_particles_spiral(n_particles, mass, int_e):
     """
     A quick wrapper function that generates the x and y co-ordinates of
     particles in a keplerian ring.
 
     @param: n_particles | int
         - the number of particles in the ring
-
-    @param: central_radius | float
-        - the radius around which the particles are arranged
-
-    @param: std_dev | float
-        - the standard deviation of the gaussian which determines how the
-          particles are arranged horizontally and vertically around the ring.
 
     @param: mass | float
         - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
@@ -261,7 +254,7 @@ def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
         - the velocity of particles in the y direction.
     """
     m_i = generate_m_i(n_particles)
-    r_i = inverse_gaussian(m_i, central_radius, std_dev)
+    r_i = inverse_gaussian(m_i, 4, 1.5)
     theta_i = generate_theta_i(r_i)
 
     # We need to remove the start and end of the spiral. We can do that here.
@@ -270,8 +263,67 @@ def generate_particles(n_particles, central_radius, std_dev, mass, int_e):
     # We need to remove those that are too large or small and end up as noisy
     # neighbors and really disrupt the ring.
 
-    upper_bound = r_i > central_radius + 1.5 * std_dev
-    lower_bound = r_i < central_radius - 1.5 * std_dev
+    upper_bound = r_i > 4 + 1.5 * 1.5
+    lower_bound = r_i < 4 - 1.5 * 1.5
+
+    mask = np.logical_or(upper_bound, lower_bound)
+
+    # Masked arrays.compressed() simply returns the non-masked data.
+    r_i = np.ma.masked_array(r_i, mask).compressed()
+    theta_i = np.ma.masked_array(theta_i, mask).compressed()
+
+    # Now we can continue again!
+
+    x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
+    v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
+
+    n_particles = len(r_i)
+    int_energy = np.zeros(n_particles) + int_e
+
+    return x_i, y_i, v_x_i, v_y_i, int_energy
+
+
+def generate_particles_grid(n_particles, mass, int_e):
+    """
+    A quick wrapper function that generates the x and y co-ordinates of
+    particles in a keplerian ring on a grid.
+
+    @param: n_particles | int
+        - the number of particles in the ring
+
+    @param: mass | float
+        - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
+          the central point particle that the keplerian ring rotates around.
+
+    @param: int_e | float
+		- the internal energy of each individual particle.
+
+    ---------------------------------------------------------------------------
+
+    @return: x_i | numpy.array
+        - the x co-ordinates of the particles in the ring
+
+    @return: y_i | numpy.array
+        - the y co-ordinates of the particles in the ring
+
+    @return: v_x_i | numpy.array
+        - the velocity of particles in the x direction
+
+    @return: v_y_i | numpy.array
+        - the velocity of particles in the y direction.
+    """
+    m_i = generate_m_i(n_particles)
+    r_i = inverse_gaussian(m_i, 4, 1.5)
+    theta_i = generate_theta_i(r_i)
+
+    # We need to remove the start and end of the spiral. We can do that here.
+    r_i, theta_i = QSP_fix(r_i, theta_i)
+
+    # We need to remove those that are too large or small and end up as noisy
+    # neighbors and really disrupt the ring.
+
+    upper_bound = r_i > 4 + 1.5 * 1.5
+    lower_bound = r_i < 4 - 1.5 * 1.5
 
     mask = np.logical_or(upper_bound, lower_bound)
 
@@ -390,26 +442,10 @@ if __name__ == "__main__":
     PARSER.add_argument(
         '-n',
         '--nparts',
-        help='Total number of particles (default: 10000). This is approximate.',
+        help='Total number of particles. This number gets squared eventually. \
+              (default: 256).',
         required=False,
-        default=10000
-    )
-    PARSER.add_argument(
-        '-r',
-        '--centralradius',
-        help='Distance to centre of the gaussian from (0, 0) \
-             (i.e. the mean radius of the ring). \
-             (default: 10 simulation units)',
-        required=False,
-        default=10
-    )
-    PARSER.add_argument(
-        '-sd',
-        '--standarddev',
-        help='Standard deviation of the gaussian (i.e. the width of the\
-              gaussian) (default: 2.5 simulation units).',
-        required=False,
-        default=2.5
+        default=256
     )
     PARSER.add_argument(
         '-pm',
@@ -432,16 +468,27 @@ if __name__ == "__main__":
         required=False,
         default=0.015
     )
+    PARSER.add_argument(
+        '-g'
+        '--generationmethod',
+        help='Generation method for the particles. Choose either grid or spiral.\
+              (default: grid).'
+        required=False,
+        default="grid"
+    )
 
     ARGS = vars(PARSER.parse_args())
 
-    PARTICLES = generate_particles(
-        int(int(ARGS['nparts']) * 1.1),
-        float(ARGS['centralradius']),
-        float(ARGS['standarddev']),
-        float(ARGS['gravity_mass']),
-		float(ARGS['internalenergy'])
-    )
+    if ARGS['generationmethod'] == "spiral":
+        PARTICLES = generate_particles_spiral(
+            int(int(ARGS['nparts']) * 1.1),
+            float(ARGS['gravity_mass']),
+            float(ARGS['internalenergy'])
+        )
+    else:
+        PARTICLES = generate_particles_grid(
+            int(ARGS['nparts']),
+        )
 
     save_to_gadget(
         ARGS['filename'],
