@@ -1,79 +1,218 @@
-"""
-###############################################################################
-# This file is part of SWIFT.
-# Copyright (c) 2017
-#
-# Josh Borrow (joshua.borrow@durham.ac.uk)
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published
-# by the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-###############################################################################
-"""
-
 import numpy as np
 import write_gadget as wg
 import h5py as h5
-from scipy.special import erfinv
 
 
-def inverse_gaussian(m_i, central_radius, standard_deviation):
+
+class Particles(object):
     """
-    The inverse of the Gaussian PDF used for generating the radial positions of
-    the particles.
-
-    @param: m_i | float / array-like
-        - the m_i that are to be used to generate the radii of the particles
-
-    @param: central_radius | float
-        - central radius of the guassian
-
-    @param: standard_deviation | float
-        - standard deviation of the gaussian.
-
-    ---------------------------------------------------------------------------
-
-    @return: radius | float / array-like
-        - the radius associated with m_i (see README for theory).
+    Holder class for particle properties.
     """
-    error_function = erfinv(2 * m_i - 1)
-    radius = central_radius + standard_deviation * np.sqrt(2) * error_function
+    def __init__(self, meta):
+        self.gravitymass = meta["gravitymass"]
+        self.nparts = meta["nparts"]**2
+        self.particlemass = meta["particlemass"]
+        self.softening = meta["softening"]
+        self.max = meta["max"]
+        self.min = meta["min"]
 
-    return radius
+        self.smoothing = np.zeros(self.nparts) + meta["smoothing"]
+        self.internalenergy = np.zeros(self.nparts) + meta["internalenergy"]
+
+        self.positions = np.array([])
+        self.radii = np.array([])
+        self.theta = np.array([])
+        self.velocities = np.array([])
+        self.ids = np.array([])
+        self.densities = np.array([])
+        self.masses = np.array([])
+
+        return
 
 
-def generate_m_i(n_particles):
+    def calculate_masses(self):
+        """
+        Calculate the individual masses for the particles such that we have
+        a uniform thickness disk, given their densities.
+        """
+        mass_factor = self.particlemass / self.densities.max()
+        self.masses = self.densities * mass_factor
+
+        return self.masses
+   
+
+    def calculate_velocities(self):
+        """
+        calculates keplerian orbit velocities for the, well, keplerian ring.
+        """
+        force_modifier = np.sqrt(self.gravitymass / (self.radii**2 + self.softening**2)**(3/2)) * self.radii 
+        
+        v_x = force_modifier * (-np.sin(self.theta))
+        v_y = force_modifier * (np.cos(self.theta))
+                    
+        self.velocities = np.array([v_x, v_y, np.zeros_like(v_x)]).T
+
+        return self.velocities
+
+
+    def generate_ids(self):
+        self.ids = np.arange(self.nparts)
+
+        return self.ids
+
+
+    def convert_polar_to_cartesian(self):
+        x = self.radii * np.cos(self.theta)
+        y = self.radii * np.sin(self.theta)
+
+        self.positions = np.array([x, y, np.zeros_like(x)]).T
+
+        return self.positions
+
+
+    def exclude_particles(self, range):
+        """
+        Exclude all particles that are *not* within range (of radii).
+        """
+        mask = np.logical_or(
+            self.radii < range[0],
+            self.radii > range[1],
+        )
+
+        x  = np.ma.array(self.positions[:, 0], mask=mask).compressed()
+        y  = np.ma.array(self.positions[:, 1], mask=mask).compressed()
+        z  = np.ma.array(self.positions[:, 2], mask=mask).compressed()
+
+        self.positions = np.array([x, y, z]).T
+        
+        try:
+            v_x  = np.ma.array(self.velocities[:, 0], mask=mask).compressed()
+            v_y  = np.ma.array(self.velocities[:, 1], mask=mask).compressed()
+            v_z  = np.ma.array(self.velocities[:, 2], mask=mask).compressed()
+
+            self.velocities = np.array([v_x, v_y, v_z])
+        except IndexError:
+            # We haven't filled them yet anyway...
+            pass
+    
+        try:
+            self.ids = np.ma.array(self.ids, mask=mask).compressed()
+        except np.ma.core.MaskError:
+            # Not filled yet.
+            pass
+
+        try:
+            self.densities = np.ma.array(self.densities, mask=mask).compressed()
+        except np.ma.core.MaskError:
+            # Not filled yet.
+            pass
+
+        try:
+            self.smoothing = np.ma.array(self.smoothing, mask=mask).compressed()
+            self.internalenergy = np.ma.array(self.internalenergy, mask=mask).compressed()
+        except np.ma.core.MaskError:
+            # QSP Fix has modified us
+            self.smoothing = self.smoothing[:self.nparts]
+            self.internalenergy = self.internalenergy[:self.nparts]
+
+        try:
+            self.masses = np.ma.array(self.masses, mask=mask).compressed()
+        except np.ma.core.MaskError:
+            # Not filled yet.
+            pass
+
+        self.radii = np.ma.array(self.radii, mask=mask).compressed()
+        self.theta = np.ma.array(self.theta, mask=mask).compressed()
+
+        self.nparts = len(self.radii)
+
+        return
+
+
+    def save_to_gadget(self, filename):
+        """ Save the particle data to a GADGET .hdf5 file.
+
+        @param: filename | string
+        - filename of the hdf5 file to save.
+
+        @param: x_i | array-like
+        - x positions of the particles
+
+        @param: y_i | array-like
+        - y positions of the particles
+
+        @param: v_x_i | array-like
+        - x velocities of the particles
+
+        @param: v_y_i | array-like
+        - y velocities of the particles
+
+        @param: hsml | float
+        - smoothing length of the particles.
+
+        @param: pm | float
+        - mass of the particles.
+
+        ---------------------------------------------------------------------------
+        """
+        with h5.File(filename, "w") as handle:
+            wg.write_header(
+                handle,
+                boxsize=8.,
+                flag_entropy=0,
+                np_total=np.array([self.nparts, 0, 0, 0, 0, 0]),
+                np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
+                other={"MassTable" : np.array([self.particlemass, 0, 0, 0, 0, 0])}
+            )
+
+            wg.write_runtime_pars(
+                handle,
+                periodic_boundary=1,
+            )
+
+            wg.write_units(
+                handle,
+                current=1.,
+                length=3.0856776e21,
+                mass=1.9885e33,
+                temperature=1.,
+                time=3.085678e16,
+            )
+
+            wg.write_block(
+                handle,
+                0,  # gas
+                self.positions,
+                self.velocities,
+                self.ids,
+                mass=self.masses,
+                int_energy=self.internalenergy,
+                smoothing=self.smoothing,
+            )
+
+        return
+
+
+def __sigma(r):
     """
-    Generate the m_i for each particle
-
-    @param: n_particles | int
-        - number of m_i to generate, or equivalently the number of particles.
-
-    ---------------------------------------------------------------------------
-
-    @return: m_i | numpy.array
-        - the m_i that are used to generate the radii of each particle.
+    Density distribution of the ring, this comes directly from Hopkins 2015.
     """
-    m_i = (np.arange(n_particles) + 0.5) / n_particles
+    if r < 0.5:
+        return 0.01 + (r/0.5)**3
+    elif r <= 2:
+        return 1.01
+    else:
+        return 0.01 + (1 + (r-2)/0.1)**(-3)
 
-    return m_i
+
+sigma = np.vectorize(__sigma)
 
 
-def generate_theta_i(r_i, theta_initial=0.):
+def generate_theta(r, theta_initial=0.):
     """
     Generate the theta associated with the particles based on their radii.
 
-    @param: r_i | float / array-like
+    @param: r | float / array-like
         - the radii of the particles.
 
     @param: theta_initial | float | optional
@@ -84,10 +223,10 @@ def generate_theta_i(r_i, theta_initial=0.):
     @return: theta_i | numpy.array
         - angles associated with the particles in the plane.
     """
-    radii_fraction = r_i[:-1] / r_i[1:]
+    radii_fraction = r[:-1] / r[1:]
     d_theta_i = np.sqrt(2 * np.pi * (1 - radii_fraction))
 
-    theta_i = np.empty_like(r_i)
+    theta_i = np.empty_like(r)
     theta_i[0] = theta_initial
 
     # Need to do this awful loop because each entry relies on the one before it.
@@ -96,62 +235,6 @@ def generate_theta_i(r_i, theta_initial=0.):
         theta_i[i+1] = theta_i[i] + d_theta_i[i]
 
     return theta_i
-
-
-def convert_polar_to_cartesian(r_i, theta_i):
-    """
-    Calculate the cartesian co-ordinates (to be used to store in the GADGET
-    file) from the polar co-ordinates generated by the script.abs
-
-    @param: r_i | float / array-like
-        - the radii of the particles
-
-    @param: theta_i | float / array-like
-        - the polar angle co-ordinate of the particles
-
-    ---------------------------------------------------------------------------
-
-    @return: x_i | float / array-like
-        - the x co-ordinates of the particles
-
-    @return: y_i | float / array-like
-        - the y co-ordinates of the particles
-    """
-    x_i = r_i * np.cos(theta_i)
-    y_i = r_i * np.sin(theta_i)
-
-    return x_i, y_i
-
-
-def get_keplerian_velocity(r_i, theta_i, mass):
-    r"""
-    The keplerian velocity of the particles given their position in the ring.
-    Note that this is exactly in the direction of $\hat{theta}$.
-
-    @param: r_i | float / array-like
-        - radial positions of the particles
-
-    @param: theta_i | float / array_like
-        - polar angle of the particles
-
-    @param: mass | float
-        - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
-          the central point particle that the keplerian ring rotates around.
-
-    ---------------------------------------------------------------------------
-
-    @return: v_x_i | numpy.array
-        - the velocity of particles in the x direction
-
-    @return: v_y_i | numpy.array
-        - the velocity of particles in the y direction.
-    """
-    force_modifier = np.sqrt(mass / r_i)
-
-    v_x_i = force_modifier * (-np.sin(theta_i))
-    v_y_i = force_modifier * (np.cos(theta_i))
-
-    return v_x_i, v_y_i
 
 
 def QSP_fix(r_i, theta_i):
@@ -224,279 +307,164 @@ def QSP_fix(r_i, theta_i):
     return np.array(r_i_fixed), np.array(theta_i_fixed)
 
 
-def generate_particles_spiral(n_particles, mass, int_e):
-    """
-    A quick wrapper function that generates the x and y co-ordinates of
-    particles in a keplerian ring.
+def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(4, 4)):
+    particles = Particles(meta)
 
-    @param: n_particles | int
-        - the number of particles in the ring
+    # Because we are using a uniform grid we actually use the same x and y
+    # range for the initial particle setup.
+    step = (range[1] - range[0])/meta["nparts"]
+    
+    x_values = np.arange(range[0], range[1], step)
 
-    @param: mass | float
-        - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
-          the central point particle that the keplerian ring rotates around.
+    # These are 2d arrays which isn't actually that helpful.
+    x, y = np.meshgrid(x_values, x_values)
+    x = x.flatten()
+    y = y.flatten()
+    z = np.zeros_like(x)
 
-    @param: int_e | float
-		- the internal energy of each individual particle.
+    particles.positions = np.array([x, y, z]).T
+    particles.radii = np.sqrt((x - centre_of_ring[0])**2 + (y - centre_of_ring[1])**2)
+    particles.theta = np.arctan2(y - centre_of_ring[1], x - centre_of_ring[0])
+    particles.exclude_particles((particles.softening, 100.))
 
-    ---------------------------------------------------------------------------
+    particles.densities = sigma(particles.radii)
+    particles.calculate_velocities()
+    particles.calculate_masses()
 
-    @return: x_i | numpy.array
-        - the x co-ordinates of the particles in the ring
+    particles.generate_ids()
 
-    @return: y_i | numpy.array
-        - the y co-ordinates of the particles in the ring
-
-    @return: v_x_i | numpy.array
-        - the velocity of particles in the x direction
-
-    @return: v_y_i | numpy.array
-        - the velocity of particles in the y direction.
-    """
-    m_i = generate_m_i(n_particles)
-    r_i = inverse_gaussian(m_i, 4, 1.5)
-    theta_i = generate_theta_i(r_i)
-
-    # We need to remove the start and end of the spiral. We can do that here.
-    r_i, theta_i = QSP_fix(r_i, theta_i)
-
-    # We need to remove those that are too large or small and end up as noisy
-    # neighbors and really disrupt the ring.
-
-    upper_bound = r_i > 4 + 1.5 * 1.5
-    lower_bound = r_i < 4 - 1.5 * 1.5
-
-    mask = np.logical_or(upper_bound, lower_bound)
-
-    # Masked arrays.compressed() simply returns the non-masked data.
-    r_i = np.ma.masked_array(r_i, mask).compressed()
-    theta_i = np.ma.masked_array(theta_i, mask).compressed()
-
-    # Now we can continue again!
-
-    x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
-    v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
-
-    n_particles = len(r_i)
-    int_energy = np.zeros(n_particles) + int_e
-
-    return x_i, y_i, v_x_i, v_y_i, int_energy
+    return particles
 
 
-def generate_particles_grid(n_particles, mass, int_e):
-    """
-    A quick wrapper function that generates the x and y co-ordinates of
-    particles in a keplerian ring on a grid.
+def gen_particles_spiral(meta, max_r=5., centre_of_ring=(4, 4)):
+    particles = Particles(meta)
 
-    @param: n_particles | int
-        - the number of particles in the ring
+    # We follow the method of TODO
+    m = (np.arange(particles.nparts) + 0.5)/particles.nparts
+    r = max_r * m
+    theta = generate_theta(r)
 
-    @param: mass | float
-        - GM (i.e. Newton's Gravitational Constant multiplied by the mass) of
-          the central point particle that the keplerian ring rotates around.
+    particles.radii, particles.theta = QSP_fix(r, theta)
+    particles.convert_polar_to_cartesian()
+    particles.nparts = len(particles.radii)
+    
+    particles.exclude_particles((particles.softening, 100.))
+    
+    particles.densities = sigma(particles.radii)
+    particles.calculate_velocities()
+    particles.calculate_masses()
 
-    @param: int_e | float
-		- the internal energy of each individual particle.
+    particles.generate_ids()
 
-    ---------------------------------------------------------------------------
-
-    @return: x_i | numpy.array
-        - the x co-ordinates of the particles in the ring
-
-    @return: y_i | numpy.array
-        - the y co-ordinates of the particles in the ring
-
-    @return: v_x_i | numpy.array
-        - the velocity of particles in the x direction
-
-    @return: v_y_i | numpy.array
-        - the velocity of particles in the y direction.
-    """
-    m_i = generate_m_i(n_particles)
-    r_i = inverse_gaussian(m_i, 4, 1.5)
-    theta_i = generate_theta_i(r_i)
-
-    # We need to remove the start and end of the spiral. We can do that here.
-    r_i, theta_i = QSP_fix(r_i, theta_i)
-
-    # We need to remove those that are too large or small and end up as noisy
-    # neighbors and really disrupt the ring.
-
-    upper_bound = r_i > 4 + 1.5 * 1.5
-    lower_bound = r_i < 4 - 1.5 * 1.5
-
-    mask = np.logical_or(upper_bound, lower_bound)
-
-    # Masked arrays.compressed() simply returns the non-masked data.
-    r_i = np.ma.masked_array(r_i, mask).compressed()
-    theta_i = np.ma.masked_array(theta_i, mask).compressed()
-
-    # Now we can continue again!
-
-    x_i, y_i = convert_polar_to_cartesian(r_i, theta_i)
-    v_x_i, v_y_i = get_keplerian_velocity(r_i, theta_i, mass)
-
-    n_particles = len(r_i)
-    int_energy = np.zeros(n_particles) + int_e
-
-    return x_i, y_i, v_x_i, v_y_i, int_energy
-
-
-def save_to_gadget(filename, x_i, y_i, v_x_i, v_y_i, int_energy, pm, hsml):
-    """ Save the particle data to a GADGET .hdf5 file.
-
-    @param: filename | string
-        - filename of the hdf5 file to save.
-
-    @param: x_i | array-like
-        - x positions of the particles
-
-    @param: y_i | array-like
-        - y positions of the particles
-
-    @param: v_x_i | array-like
-        - x velocities of the particles
-
-    @param: v_y_i | array-like
-        - y velocities of the particles
-
-    @param: hsml | float
-        - smoothing length of the particles.
-
-    @param: pm | float
-        - mass of the particles.
-
-    ---------------------------------------------------------------------------
-    """
-    n_particles = len(x_i)
-
-    positions = np.array([x_i, y_i, np.zeros_like(x_i)]).T
-    velocities = np.array([v_x_i, v_y_i, np.zeros_like(v_x_i)]).T
-    ids = np.arange(n_particles)
-
-    with h5.File(filename, "w") as handle:
-        wg.write_header(
-            handle,
-            boxsize=200.,
-            flag_entropy=0,
-            np_total=np.array([n_particles, 0, 0, 0, 0, 0]),
-            np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
-            other={"MassTable" : np.array([pm, 0, 0, 0, 0, 0])}
-        )
-
-        wg.write_runtime_pars(
-            handle,
-            periodic_boundary=1,
-        )
-
-        wg.write_units(
-            handle,
-            current=1.,
-            length=3.0856776e21,
-            mass=1.9885e33,
-            temperature=1.,
-            time=3.085678e16,
-        )
-
-        wg.write_block(
-            handle,
-            0,  # gas
-            positions,
-            velocities,
-            ids,
-            mass=np.zeros(n_particles) + pm,
-            int_energy=int_energy,
-            smoothing=np.zeros(n_particles) + hsml
-        )
-
-    return
-
+    return particles
 
 if __name__ == "__main__":
-    # Run in script mode!
-
     import argparse as ap
 
+    # TODO: Add these descriptions
     PARSER = ap.ArgumentParser(
-        description="""Initial conditions generator for the Keplerian Ring
-                       example. It has sensible defaults, but if you wish to
-                       play around this script can be configured using command
-                       line arguments. For more information on those, see
-                       below."""
+        description="""
+                    Hello
+                    """
     )
 
     PARSER.add_argument(
-        '-m',
-        '--gravity_mass',
-        help='GM for your central point mass (default: 43009.7 simulation units)',
+        "-m",
+        "--gravitymass",
         required=False,
-        default=43009.7
+        default=1.,
     )
+
     PARSER.add_argument(
-        '-f',
-        '--filename',
-        help='Output filename (default: initial_conditions.hdf5)',
+        "-f",
+        "--filename",
         required=False,
-        default="initial_conditions.hdf5"
+        default="initial_conditions.hdf5",
     )
+
     PARSER.add_argument(
-        '-n',
-        '--nparts',
-        help='Total number of particles. This number gets squared eventually. \
-              (default: 256).',
+        "-n",
+        "--nparts",
         required=False,
-        default=256
+        default=128,
     )
+
     PARSER.add_argument(
-        '-pm',
-        '--particlemass',
-        help='Mass of the SPH particles (default: 1 simulation units).',
+        "-p",
+        "--particlemass",
         required=False,
-        default=1
+        default=10.,
     )
+
     PARSER.add_argument(
-        '-hs',
-        '--smoothing',
-        help='Smoothing length of the SPH particles (default: 1.28 simulation units).',
+        "-e",
+        "--softening",
         required=False,
-        default=1.28
+        default=0.05,
     )
+
     PARSER.add_argument(
-        '-ie',
-        '--internalenergy',
-        help='Internal energy of the SPH particles (default: 0.015 simulation units).',
+        "-s",
+        "--smoothing",
+        required=False,
+        default=0.89,
+    )
+    
+    PARSER.add_argument(
+        "-i",
+        "--internalenergy",
         required=False,
         default=0.015
     )
+
     PARSER.add_argument(
-        '-g'
-        '--generationmethod',
-        help='Generation method for the particles. Choose either grid or spiral.\
-              (default: grid).'
+        "-g",
+        "--generationmethod",
         required=False,
-        default="grid"
+        default="grid",
     )
+
+    PARSER.add_argument(
+        "-t",
+        "--max",
+        required=False,
+        default=7.,
+    )
+
+    PARSER.add_argument(
+        "-b",
+        "--min",
+        required=False,
+        default=1.,
+    )
+
+    ### --- ### --- Argument Parsing --- ### --- ###
 
     ARGS = vars(PARSER.parse_args())
 
-    if ARGS['generationmethod'] == "spiral":
-        PARTICLES = generate_particles_spiral(
-            int(int(ARGS['nparts']) * 1.1),
-            float(ARGS['gravity_mass']),
-            float(ARGS['internalenergy'])
-        )
+    if ARGS["generationmethod"] == "grid":
+        gen_particles = gen_particles_grid
+    elif ARGS["generationmethod"] == "spiral":
+        gen_particles = gen_particles_spiral
     else:
-        PARTICLES = generate_particles_grid(
-            int(ARGS['nparts']),
+        print(
+            "ERROR: {} is an invalid generation method. Exiting.".format(
+                ARGS["generationmethod"]
+            )
         )
+        exit(1)
 
-    save_to_gadget(
-        ARGS['filename'],
-        PARTICLES[0],
-        PARTICLES[1],
-        PARTICLES[2],
-        PARTICLES[3],
-        PARTICLES[4],
-        float(ARGS['particlemass']),
-        float(ARGS['smoothing'])
-    )
+    META = {
+        "gravitymass": float(ARGS["gravitymass"]),
+        "nparts": int(ARGS["nparts"]),
+        "particlemass": float(ARGS["particlemass"]),
+        "smoothing": float(ARGS["smoothing"]),
+        "softening": float(ARGS["softening"]),
+        "internalenergy": float(ARGS["internalenergy"]),
+        "max": float(ARGS["max"]),
+        "min": float(ARGS["min"]),
+    }
+
+    PARTICLES = gen_particles(META)
+
+    PARTICLES.save_to_gadget(filename=ARGS["filename"])
