@@ -206,10 +206,10 @@ class Particles(object):
             wg.write_units(
                 handle,
                 current=1.,
-                length=3.0856776e21,
-                mass=1.9885e33,
+                length=1.,
+                mass=1,
                 temperature=1.,
-                time=3.085678e16,
+                time=1.,
             )
 
             wg.write_block(
