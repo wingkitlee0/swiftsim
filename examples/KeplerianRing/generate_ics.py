@@ -221,6 +221,7 @@ class Particles(object):
                 mass=self.masses,
                 int_energy=self.internalenergy,
                 smoothing=self.smoothing,
+                other={"Density": self.densities},
             )
 
         return
@@ -358,8 +359,8 @@ def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(8, 8)):
 
     # These are 2d arrays which isn't actually that helpful.
     x, y = np.meshgrid(x_values, x_values)
-    x = x.flatten()
-    y = y.flatten()
+    x = x.flatten() + centre_of_ring[0]
+    y = y.flatten() + centre_of_ring[1]
     z = np.zeros_like(x)
 
     particles.positions = np.array([x, y, z]).T
