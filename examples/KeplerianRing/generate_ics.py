@@ -1,6 +1,6 @@
-"""
-###############################################################################
-# This file is part of SWIFT.
+"""1.9885e33   
+###3.0856776e21############################################################################
+# T1e5         his file is part of SWIFT.
 # Copyright (c) 2017
 #
 # Josh Borrow (joshua.borrow@durham.ac.uk)
@@ -91,12 +91,12 @@ class Particles(object):
         return self.ids
 
 
-    def convert_polar_to_cartesian(self):
+    def convert_polar_to_cartesian(self, centre_of_ring=(8, 8)):
         """
         Converts self.radii, self.theta to self.positions.
         """
-        x = self.radii * np.cos(self.theta)
-        y = self.radii * np.sin(self.theta)
+        x = self.radii * np.cos(self.theta) + centre_of_ring[0]
+        y = self.radii * np.sin(self.theta) + centre_of_ring[1]
 
         self.positions = np.array([x, y, np.zeros_like(x)]).T
 
@@ -388,7 +388,7 @@ def gen_particles_spiral(meta, max_r=5., centre_of_ring=(8, 8)):
     theta = generate_theta(r)
 
     particles.radii, particles.theta = QSP_fix(r, theta)
-    particles.convert_polar_to_cartesian()
+    particles.convert_polar_to_cartesian(centre_of_ring)
     particles.nparts = len(particles.radii)
     
     particles.exclude_particles((particles.softening, 100.))
