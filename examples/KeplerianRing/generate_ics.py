@@ -1,12 +1,37 @@
+"""
+###############################################################################
+# This file is part of SWIFT.
+# Copyright (c) 2017
+#
+# Josh Borrow (joshua.borrow@durham.ac.uk)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+###############################################################################
+"""
+
+
 import numpy as np
 import write_gadget as wg
 import h5py as h5
 
 
-
 class Particles(object):
     """
-    Holder class for particle properties.
+    Holder class for particle properties. Also contains some methods to e.g.
+    set their keplerian velocities based on their positions. These properties
+    are set using the 'generationmethod' functions below.
     """
     def __init__(self, meta):
         self.gravitymass = meta["gravitymass"]
@@ -43,7 +68,8 @@ class Particles(object):
 
     def calculate_velocities(self):
         """
-        calculates keplerian orbit velocities for the, well, keplerian ring.
+        Calculates keplerian orbit velocities for the, well, keplerian ring.
+        Requires that radius and theta are set already.
         """
         force_modifier = np.sqrt(self.gravitymass / (self.radii**2 + self.softening**2)**(3/2)) * self.radii 
         
@@ -56,12 +82,19 @@ class Particles(object):
 
 
     def generate_ids(self):
+        """
+        Generate consecutive IDs from 0 based on the number of particles
+        currently in the object.
+        """
         self.ids = np.arange(self.nparts)
 
         return self.ids
 
 
     def convert_polar_to_cartesian(self):
+        """
+        Converts self.radii, self.theta to self.positions.
+        """
         x = self.radii * np.cos(self.theta)
         y = self.radii * np.sin(self.theta)
 
@@ -205,12 +238,16 @@ def __sigma(r):
         return 0.01 + (1 + (r-2)/0.1)**(-3)
 
 
+# This is required because of the if, else statement above that does not
+# play nicely with our numpy arrays.
 sigma = np.vectorize(__sigma)
 
 
 def generate_theta(r, theta_initial=0.):
     """
     Generate the theta associated with the particles based on their radii.
+    This uses the method from The effect of Poisson noise on SPH calculations,
+    Annabel Cartwright, Dimitris Stamatellos and Anthony P. Whitworth 2009.
 
     @param: r | float / array-like
         - the radii of the particles.
@@ -308,6 +345,9 @@ def QSP_fix(r_i, theta_i):
 
 
 def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(4, 4)):
+    """
+    Generates particles on a grid and returns a filled Particles object.
+    """
     particles = Particles(meta)
 
     # Because we are using a uniform grid we actually use the same x and y
@@ -337,9 +377,12 @@ def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(4, 4)):
 
 
 def gen_particles_spiral(meta, max_r=5., centre_of_ring=(4, 4)):
+    """
+    Generates particles on concentric circles and returns a filled Particles
+    object. Based on Cartwright, Stamatellos & Whitworth (2009).
+    """
     particles = Particles(meta)
 
-    # We follow the method of TODO
     m = (np.arange(particles.nparts) + 0.5)/particles.nparts
     r = max_r * m
     theta = generate_theta(r)
@@ -364,13 +407,19 @@ if __name__ == "__main__":
     # TODO: Add these descriptions
     PARSER = ap.ArgumentParser(
         description="""
-                    Hello
+                    Initial conditions generator for the Keplerian Ring
+                    example. It has sensible defaults for GIZMO, but if you
+                    wish to run the example with SPH you sould use
+                    --generationmethod spiral.
                     """
     )
 
     PARSER.add_argument(
         "-m",
         "--gravitymass",
+        help="""
+             GM for the central point mass. Default: 1.
+             """,
         required=False,
         default=1.,
     )
@@ -378,6 +427,10 @@ if __name__ == "__main__":
     PARSER.add_argument(
         "-f",
         "--filename",
+        help="""
+             Filename for your initial conditions.
+             Default: initial_conditions.hdf5.
+             """,
         required=False,
         default="initial_conditions.hdf5",
     )
@@ -385,6 +438,12 @@ if __name__ == "__main__":
     PARSER.add_argument(
         "-n",
         "--nparts",
+        help="""
+             Square-root of the number of particles, i.e. the default
+             nparts=128 leads to a ring with 128^2 particles in it.
+             Note that for the spiral generation method this number is 
+             somewhat approximate.
+             """,
         required=False,
         default=128,
     )
@@ -392,6 +451,9 @@ if __name__ == "__main__":
     PARSER.add_argument(
         "-p",
         "--particlemass",
+        help="""
+             Maximum mass of the gas particles. Default: 10.
+             """,
         required=False,
         default=10.,
     )
@@ -399,6 +461,11 @@ if __name__ == "__main__":
     PARSER.add_argument(
         "-e",
         "--softening",
+        help="""
+             Gravitational softening for the centre of the ring. We also
+             exclude all particles within this radius from the centre of the
+             ring. Default: 0.05.
+             """,
         required=False,
         default=0.05,
     )
@@ -406,6 +473,10 @@ if __name__ == "__main__":
     PARSER.add_argument(
         "-s",
         "--smoothing",
+        help="""
+             Initial smoothing length for all of the particles.
+             Default: 0.89.
+             """,
         required=False,
         default=0.89,
     )
@@ -413,6 +484,11 @@ if __name__ == "__main__":
     PARSER.add_argument(
         "-i",
         "--internalenergy",
+        help="""
+             Initial internal energy for all of the particles. Note that this
+             should be low to ensure that the ring is very cold (see Inviscid
+             SPH for details). Default: 0.015.
+             """,
         required=False,
         default=0.015
     )
@@ -420,6 +496,13 @@ if __name__ == "__main__":
     PARSER.add_argument(
         "-g",
         "--generationmethod",
+        help="""
+             Generation method for the particles. Choose between grid and
+             spiral, where spiral ensures that the particles are generated
+             in a way that minimises the energy in SPH. For more details on
+             this method see Cartwright, Stamatellos & Whitworth (2009).
+             Default: grid.
+             """,
         required=False,
         default="grid",
     )
