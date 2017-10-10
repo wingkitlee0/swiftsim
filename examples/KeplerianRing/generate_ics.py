@@ -191,7 +191,7 @@ class Particles(object):
         with h5.File(filename, "w") as handle:
             wg.write_header(
                 handle,
-                boxsize=8.,
+                boxsize=16.,
                 flag_entropy=0,
                 np_total=np.array([self.nparts, 0, 0, 0, 0, 0]),
                 np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
@@ -344,7 +344,7 @@ def QSP_fix(r_i, theta_i):
     return np.array(r_i_fixed), np.array(theta_i_fixed)
 
 
-def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(4, 4)):
+def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(8, 8)):
     """
     Generates particles on a grid and returns a filled Particles object.
     """
@@ -376,7 +376,7 @@ def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(4, 4)):
     return particles
 
 
-def gen_particles_spiral(meta, max_r=5., centre_of_ring=(4, 4)):
+def gen_particles_spiral(meta, max_r=5., centre_of_ring=(8, 8)):
     """
     Generates particles on concentric circles and returns a filled Particles
     object. Based on Cartwright, Stamatellos & Whitworth (2009).
