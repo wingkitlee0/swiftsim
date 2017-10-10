@@ -1,6 +1,6 @@
-"""1.9885e33   
-###3.0856776e21############################################################################
-# T1e5         his file is part of SWIFT.
+"""
+###############################################################################
+# This file is part of SWIFT.
 # Copyright (c) 2017
 #
 # Josh Borrow (joshua.borrow@durham.ac.uk)
@@ -359,8 +359,8 @@ def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(8, 8)):
 
     # These are 2d arrays which isn't actually that helpful.
     x, y = np.meshgrid(x_values, x_values)
-    x = x.flatten() + centre_of_ring[0]
-    y = y.flatten() + centre_of_ring[1]
+    x = x.flatten() + centre_of_ring[0] - (range[1] - range[0])/2
+    y = y.flatten() + centre_of_ring[1] - (range[1] - range[0])/2
     z = np.zeros_like(x)
 
     particles.positions = np.array([x, y, z]).T
