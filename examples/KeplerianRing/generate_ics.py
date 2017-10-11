@@ -140,13 +140,11 @@ class Particles(object):
             # Not filled yet.
             pass
 
-        try:
-            self.smoothing = np.ma.array(self.smoothing, mask=mask).compressed()
-            self.internalenergy = np.ma.array(self.internalenergy, mask=mask).compressed()
-        except np.ma.core.MaskError:
-            # QSP Fix has modified us
-            self.smoothing = self.smoothing[:self.nparts]
-            self.internalenergy = self.internalenergy[:self.nparts]
+        # QSP Fix has modified us, so first we need to chop off extras.
+        # Then, as they are all the same, we don't need to remove 'specific'
+        # values, and so we can just chop off the ends.
+        self.smoothing = self.smoothing[:len(x)]
+        self.internalenergy = self.internalenergy[:len(x)]
 
         try:
             self.masses = np.ma.array(self.masses, mask=mask).compressed()
@@ -401,6 +399,7 @@ def gen_particles_spiral(meta, max_r=5., centre_of_ring=(8, 8)):
     particles.generate_ids()
 
     return particles
+
 
 if __name__ == "__main__":
     import argparse as ap
