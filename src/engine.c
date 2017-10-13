@@ -5505,7 +5505,7 @@ void engine_init(struct engine *e, struct space *s, struct swift_params *params,
   parser_get_opt_param_string(params, "Snapshots:dump_file", logger_name_file, e->snapshotBaseName);
   strcat(logger_name_file, ".dump");
   e->logger_dump = malloc(sizeof(struct dump));
-  dump_init(e->logger_dump, logger_name_file, 1024 * 1024 * 10);
+  dump_init(e->logger_dump, logger_name_file, 1024 * 1024 * 100);
 #endif
 
   /* Make the space link back to the engine. */
@@ -6323,6 +6323,7 @@ void engine_clean(struct engine *e) {
   free(e->snapshot_units);
   free(e->links);
 #if defined(WITH_LOGGER)
+  dump_close(e->logger_dump);
   free(e->logger_dump);
 #endif
   scheduler_clean(&e->sched);
