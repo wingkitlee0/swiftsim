@@ -184,7 +184,7 @@ class Particles(object):
         @param: pm | float
         - mass of the particles.
 
-        ---------------------------------------------------------------------------
+        -----------------------------------------------------------------------
         """
         with h5.File(filename, "w") as handle:
             wg.write_header(
@@ -193,7 +193,10 @@ class Particles(object):
                 flag_entropy=0,
                 np_total=np.array([self.nparts, 0, 0, 0, 0, 0]),
                 np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
-                other={"MassTable" : np.array([self.particlemass, 0, 0, 0, 0, 0])}
+                other={
+                    "MassTable" : np.array([self.particlemass, 0, 0, 0, 0, 0]),
+                    "Time" : 0,
+                }
             )
 
             wg.write_runtime_pars(
