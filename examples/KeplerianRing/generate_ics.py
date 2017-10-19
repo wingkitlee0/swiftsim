@@ -38,8 +38,7 @@ class Particles(object):
         self.nparts = meta["nparts"]**2
         self.particlemass = meta["particlemass"]
         self.softening = meta["softening"]
-        self.max = meta["max"]
-        self.min = meta["min"]
+        self.boxsize = meta["boxsize"]
 
         self.smoothing = np.zeros(self.nparts) + meta["smoothing"]
         self.internalenergy = np.zeros(self.nparts) + meta["internalenergy"]
@@ -91,7 +90,7 @@ class Particles(object):
         return self.ids
 
 
-    def convert_polar_to_cartesian(self, centre_of_ring=(8, 8)):
+    def convert_polar_to_cartesian(self, centre_of_ring=(5, 5)):
         """
         Converts self.radii, self.theta to self.positions.
         """
@@ -160,7 +159,7 @@ class Particles(object):
         return
 
 
-    def save_to_gadget(self, filename):
+    def save_to_gadget(self, filename, boxsize=10.):
         """ Save the particle data to a GADGET .hdf5 file.
 
         @param: filename | string
@@ -189,7 +188,7 @@ class Particles(object):
         with h5.File(filename, "w") as handle:
             wg.write_header(
                 handle,
-                boxsize=16.,
+                boxsize=boxsize,
                 flag_entropy=0,
                 np_total=np.array([self.nparts, 0, 0, 0, 0, 0]),
                 np_total_hw=np.array([0, 0, 0, 0, 0, 0]),
@@ -346,17 +345,19 @@ def QSP_fix(r_i, theta_i):
     return np.array(r_i_fixed), np.array(theta_i_fixed)
 
 
-def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(8, 8)):
+def gen_particles_grid(meta):
     """
     Generates particles on a grid and returns a filled Particles object.
     """
     particles = Particles(meta)
+    range = (0, meta["boxsize"])
+    centre_of_ring = (meta["boxsize"]/2., meta["boxsize"]/2.)
 
     # Because we are using a uniform grid we actually use the same x and y
     # range for the initial particle setup.
     step = (range[1] - range[0])/meta["nparts"]
     
-    x_values = np.arange(range[0], range[1], step)
+    x_values = np.arange(0, range[1] - range[0], step)
 
     # These are 2d arrays which isn't actually that helpful.
     x, y = np.meshgrid(x_values, x_values)
@@ -378,12 +379,15 @@ def gen_particles_grid(meta, range=(1, 7), centre_of_ring=(8, 8)):
     return particles
 
 
-def gen_particles_spiral(meta, max_r=5., centre_of_ring=(8, 8)):
+def gen_particles_spiral(meta):
     """
     Generates particles on concentric circles and returns a filled Particles
     object. Based on Cartwright, Stamatellos & Whitworth (2009).
     """
     particles = Particles(meta)
+    centre_of_ring = (meta["boxsize"]/2., meta["boxsize"]/2.)
+    max_r = meta["boxsize"]/2.
+
 
     m = (np.arange(particles.nparts) + 0.5)/particles.nparts
     r = max_r * m
@@ -511,18 +515,15 @@ if __name__ == "__main__":
     )
 
     PARSER.add_argument(
-        "-t",
-        "--max",
+        "-b",
+        "--boxsize",
+        help="""
+             The box size. Default: 10.
+             """,
         required=False,
-        default=7.,
+        default=10.
     )
 
-    PARSER.add_argument(
-        "-b",
-        "--min",
-        required=False,
-        default=1.,
-    )
 
     ### --- ### --- Argument Parsing --- ### --- ###
 
@@ -547,10 +548,13 @@ if __name__ == "__main__":
         "smoothing": float(ARGS["smoothing"]),
         "softening": float(ARGS["softening"]),
         "internalenergy": float(ARGS["internalenergy"]),
-        "max": float(ARGS["max"]),
-        "min": float(ARGS["min"]),
+        "boxsize": float(ARGS["boxsize"])
     }
 
     PARTICLES = gen_particles(META)
 
-    PARTICLES.save_to_gadget(filename=ARGS["filename"])
+    PARTICLES.save_to_gadget(
+        filename=ARGS["filename"],
+        boxsize=ARGS["boxsize"],
+    )
+
