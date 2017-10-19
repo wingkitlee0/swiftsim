@@ -38,8 +38,8 @@ InitialConditions:
 
 # External potential parameters
 PointMassPotential:
-  position_x:      8.     # location of external point mass in internal units
-  position_y:      8.     # here just take this to be the centre of the ring
+  position_x:      5.     # location of external point mass in internal units
+  position_y:      5.     # here just take this to be the centre of the ring
   position_z:      0.	
   mass:            1.498351e7     # mass of external point mass in internal units
   timestep_mult:   0.03     # controls time step
