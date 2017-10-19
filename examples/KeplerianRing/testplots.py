@@ -28,21 +28,18 @@
 """
 
 
-import matplotlib.pyplot as plt
-from generate_ics import generate_particles
-
-
 if __name__ == "__main__":
-    # Check that keplerian velocities look correct.
-    x, y, vx, vy = generate_particles(100, 10, 2.5, 1000)
+    import yt
 
-    fig = plt.figure(figsize=(6, 6))
-    ax = fig.add_subplot(111)
+    data = yt.load("initial_conditions.hdf5")
 
-    ax.quiver(x, y, vx, vy)
-    ax.set_xlim(-20, 20)
-    ax.set_ylim(-20, 20)
+    plot = yt.ParticlePlot(
+        data,
+        "particle_position_x",
+        "particle_position_y",
+        "density"
+    )
 
-    fig.show()
-    print("Press enter to quit.")
-    input()  # keep the figure alive
+    plot.save("test.png")
+
+
