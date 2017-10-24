@@ -99,15 +99,15 @@ if __name__ == "__main__":
     # Initial plot setup
 
     scatter, = ax.plot([0]*n_particle, [0]*n_particle, ms=0.5, marker="o", linestyle="")
-    ax.set_xlim(80, 120)
-    ax.set_ylim(80, 120)
+    ax.set_xlim(0, metadata['header']['BoxSize'][0])
+    ax.set_ylim(0, metadata['header']['BoxSize'][0])
 
-    time_text = ax.text(81, 81, "Time: {:1.2f} | Rotations {:1.2f}".format(
+    time_text = ax.text(1, 1, "Time: {:1.2f} | Rotations {:1.2f}".format(
         0,
         0/metadata['period'],
     ))
 
-    ax.text(81, 116, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
+    ax.text(1, metadata['header']['BoxSize'][0]-1, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
         metadata['code']['Git Branch'].decode("utf-8"),
         metadata['code']['Git Revision'].decode("utf-8"),
         metadata['code']['Compiler Name'].decode("utf-8"),
