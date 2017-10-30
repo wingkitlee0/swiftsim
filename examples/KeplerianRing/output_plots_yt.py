@@ -73,7 +73,6 @@ if __name__ == "__main__":
     # Now we need to do the density(r) plot.
     print("Making Profile Plots")
     plot = yt.ProfilePlot(disks["0000"], "particle_radius", "density", "particle_mass")
-    plot.save()
     p = plot.plots["density"]
     p.figure = figure
     p.axes = axes[3]
