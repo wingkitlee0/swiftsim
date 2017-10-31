@@ -1420,6 +1420,9 @@ void cell_activate_subcell_tasks(struct cell *ci, struct cell *cj,
                                  struct scheduler *s) {
   const struct engine *e = s->space->e;
 
+  /* Quit early? */
+  if (!cell_is_active(ci, e) && (cj == NULL || !cell_is_active(cj, e))) return;
+
   /* Store the current dx_max and h_max values. */
   ci->dx_max_old = ci->dx_max_part;
   ci->h_max_old = ci->h_max;
@@ -1430,9 +1433,6 @@ void cell_activate_subcell_tasks(struct cell *ci, struct cell *cj,
 
   /* Self interaction? */
   if (cj == NULL) {
-    /* Do anything? */
-    if (!cell_is_active(ci, e)) return;
-
     /* Recurse? */
     if (cell_can_recurse_in_self_task(ci)) {
 
@@ -1659,7 +1659,7 @@ void cell_activate_subcell_tasks(struct cell *ci, struct cell *cj,
   }
 
   /* Otherwise, activate the sorts and drifts. */
-  else if (cell_is_active(ci, e) || cell_is_active(cj, e)) {
+  else {
 
     /* Get the type of pair if not specified explicitly. */
     double shift[3];
