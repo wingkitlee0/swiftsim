@@ -1572,7 +1572,8 @@ INLINE static void gravity_M2L(struct grav_tensor *l_b,
 
   /* Compute all derivatives */
   struct potential_derivatives_M2L pot;
-  compute_potential_derivatives_M2L(dx, dy, dz, r2, r_inv, eps, eps_inv, &pot);
+  compute_potential_derivatives_M2L(dx, dy, dz, r2, r_inv, eps, eps_inv,
+                                    periodic, &pot);
 
 #ifdef SWIFT_DEBUG_CHECKS
   /* Count interactions */

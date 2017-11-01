@@ -124,11 +124,13 @@ struct potential_derivatives_M2P {
  * @param r_inv Inverse norm of distance vector
  * @param eps Softening length.
  * @param eps_inv Inverse of softening length.
+ * @param periodic Is the calculation periodic ?
  * @param pot (return) The structure containing all the derivatives.
  */
 __attribute__((always_inline)) INLINE static void
 compute_potential_derivatives_M2L(float r_x, float r_y, float r_z, float r2,
                                   float r_inv, float eps, float eps_inv,
+                                  int periodic,
                                   struct potential_derivatives_M2L *pot) {
 
   float Dt_1;
@@ -148,8 +150,8 @@ compute_potential_derivatives_M2L(float r_x, float r_y, float r_z, float r2,
   float Dt_11;
 #endif
 
-  /* Un-softened case */
-  if (r2 > eps * eps) {
+  /* Un-softened un-truncated case (Newtonian potential) */
+  if (!periodic && r2 > eps * eps) {
 
     Dt_1 = r_inv;
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 0
@@ -172,6 +174,31 @@ compute_potential_derivatives_M2L(float r_x, float r_y, float r_z, float r2,
 #error "Missing implementation for order >5"
 #endif
 
+    /* Un-softened truncated case */
+  } else if (periodic && r2 > eps * eps) {
+
+    Dt_1 = r_inv;
+#if SELF_GRAVITY_MULTIPOLE_ORDER > 0
+    const float r_inv2 = r_inv * r_inv;
+    Dt_3 = -1.f * Dt_1 * r_inv2; /* -1 / r^3 */
+#endif
+#if SELF_GRAVITY_MULTIPOLE_ORDER > 1
+    Dt_5 = -3.f * Dt_3 * r_inv2; /* 3 / r^5 */
+#endif
+#if SELF_GRAVITY_MULTIPOLE_ORDER > 2
+    Dt_7 = -5.f * Dt_5 * r_inv2; /* -15 / r^7 */
+#endif
+#if SELF_GRAVITY_MULTIPOLE_ORDER > 3
+    Dt_9 = -7.f * Dt_7 * r_inv2; /* 105 / r^9 */
+#endif
+#if SELF_GRAVITY_MULTIPOLE_ORDER > 4
+    Dt_11 = -9.f * Dt_9 * r_inv2; /* -945 / r^11 */
+#endif
+#if SELF_GRAVITY_MULTIPOLE_ORDER > 5
+#error "Missing implementation for order >5"
+#endif
+
+    /* Softened case */
   } else {
     const float r = r2 * r_inv;
     const float u = r * eps_inv;
