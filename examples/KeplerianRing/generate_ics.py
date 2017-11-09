@@ -90,14 +90,15 @@ class Particles(object):
         return self.ids
 
 
-    def convert_polar_to_cartesian(self, centre_of_ring=(5, 5)):
+    def convert_polar_to_cartesian(self, centre_of_ring=(5, 5), boxsize):
         """
         Converts self.radii, self.theta to self.positions.
         """
         x = self.radii * np.cos(self.theta) + centre_of_ring[0]
         y = self.radii * np.sin(self.theta) + centre_of_ring[1]
+        z = np.zeros_like(x) + boxsize/2
 
-        self.positions = np.array([x, y, np.zeros_like(x)]).T
+        self.positions = np.array([x, y, z]).T
 
         return self.positions
 
@@ -363,7 +364,7 @@ def gen_particles_grid(meta):
     x, y = np.meshgrid(x_values, x_values)
     x = x.flatten() + centre_of_ring[0] - (range[1] - range[0])/2
     y = y.flatten() + centre_of_ring[1] - (range[1] - range[0])/2
-    z = np.zeros_like(x)
+    z = np.zeros_like(x) + meta["boxsize"]/2
 
     particles.positions = np.array([x, y, z]).T
     particles.radii = np.sqrt((x - centre_of_ring[0])**2 + (y - centre_of_ring[1])**2)
@@ -394,7 +395,7 @@ def gen_particles_spiral(meta):
     theta = generate_theta(r)
 
     particles.radii, particles.theta = QSP_fix(r, theta)
-    particles.convert_polar_to_cartesian(centre_of_ring)
+    particles.convert_polar_to_cartesian(centre_of_ring, meta["boxsize"])
     particles.nparts = len(particles.radii)
     
     particles.exclude_particles((particles.softening, 100.))
