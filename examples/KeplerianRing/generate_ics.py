@@ -525,10 +525,24 @@ if __name__ == "__main__":
         default=10.
     )
 
+    PARSER.add_argument(
+        "-a",
+        "--angle",
+        help="""
+             Angle of incline on the disk (degrees). Default: 0.
+             """,
+        required=False,
+        default=0.
+    )
+
 
     ### --- ### --- Argument Parsing --- ### --- ###
 
     ARGS = vars(PARSER.parse_args())
+
+    if ARGS["angle"]:
+        print("Varing angles are not yet implemented.")
+        raise NotImplementedError
 
     if ARGS["generationmethod"] == "grid":
         gen_particles = gen_particles_grid
@@ -549,7 +563,8 @@ if __name__ == "__main__":
         "smoothing": float(ARGS["smoothing"]),
         "softening": float(ARGS["softening"]),
         "internalenergy": float(ARGS["internalenergy"]),
-        "boxsize": float(ARGS["boxsize"])
+        "boxsize": float(ARGS["boxsize"]),
+        "angle" : float(ARGS["angle"])
     }
 
     PARTICLES = gen_particles(META)
