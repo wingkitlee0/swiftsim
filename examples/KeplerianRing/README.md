@@ -32,6 +32,13 @@ by using
 in the root directory of the project. We suggest leaving all other code options
 as their defaults.
 
+Please also consider using:
+
+    ./configure --with-ext-potential=point-mass-softened
+
+if you are running with the initial conditions generated with the script and
+using a nonzero softening.
+
 
 Initial Conditions Generation
 -----------------------------
