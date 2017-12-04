@@ -2703,7 +2703,7 @@ void space_init_gparts(struct space *s, int verbose) {
 
   if (s->nr_gparts > 0)
     threadpool_map(&s->e->threadpool, space_init_gparts_mapper, s->gparts,
-                   s->nr_gparts, sizeof(struct part), 0, NULL);
+                   s->nr_gparts, sizeof(struct gpart), 0, NULL);
   if (verbose)
     message("took %.3f %s.", clocks_from_ticks(getticks() - tic),
             clocks_getunit());
@@ -2928,14 +2928,15 @@ void space_init(struct space *s, const struct swift_params *params,
   hydro_space_init(&s->hs, s);
 
   ticks tic = getticks();
-  message("first init...");
+  if (verbose) message("first init...");
   /* Set the particles in a state where they are ready for a run */
   space_first_init_parts(s);
   space_first_init_xparts(s);
   space_first_init_gparts(s);
   space_first_init_sparts(s);
-  message("took %.3f %s.", clocks_from_ticks(getticks() - tic),
-          clocks_getunit());
+  if (verbose)
+    message("took %.3f %s.", clocks_from_ticks(getticks() - tic),
+            clocks_getunit());
 
   /* Init the space lock. */
   if (lock_init(&s->lock) != 0) error("Failed to create space spin-lock.");
@@ -2957,7 +2958,8 @@ void space_replicate(struct space *s, int replicate, int verbose) {
 
   if (replicate < 1) error("Invalid replicate value: %d", replicate);
 
-  message("Replicating space %d times along each axis.", replicate);
+  if (verbose)
+    message("Replicating space %d times along each axis.", replicate);
 
   const int factor = replicate * replicate * replicate;
 
