@@ -56,6 +56,10 @@
 #include "./hydro/Shadowswift/hydro_iact.h"
 #define SPH_IMPLEMENTATION \
   "Shadowfax moving mesh (Vandenbroucke and De Rijcke 2016)"
+#elif defined(GIANT_IMPACTS_SPH)
+#include "./hydro/giant_impacts/hydro.h"
+#include "./hydro/giant_impacts/hydro_iact.h"
+#define SPH_IMPLEMENTATION "Giant impacts version of SPH (Jacob Kegerreis)"
 #else
 #error "Invalid choice of SPH variant"
 #endif

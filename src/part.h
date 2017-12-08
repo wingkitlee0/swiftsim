@@ -65,6 +65,9 @@
 #include "./hydro/Shadowswift/hydro_part.h"
 #define hydro_need_extra_init_loop 0
 #define EXTRA_HYDRO_LOOP
+#elif defined(GIANT_IMPACTS_SPH)
+#include "./hydro/giant_impacts/hydro_part.h"
+#define hydro_need_extra_init_loop 0
 #else
 #error "Invalid choice of SPH variant"
 #endif

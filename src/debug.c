@@ -54,6 +54,8 @@
 #include "./hydro/Gizmo/hydro_debug.h"
 #elif defined(SHADOWFAX_SPH)
 #include "./hydro/Shadowswift/hydro_debug.h"
+#elif defined(GIANT_IMPACTS_SPH)
+#include "./hydro/giant_impacts/hydro_debug.h"
 #else
 #error "Invalid choice of SPH variant"
 #endif
