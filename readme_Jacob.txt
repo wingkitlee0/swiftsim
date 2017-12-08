@@ -45,14 +45,22 @@ SWIFT tour:
     relevant files that call the parser, not consolidated to any one place.
 
 
+Getting started:
+    $ ./autogen.sh
+    $ ./configure       (see below)
+    $ make
+
 Compiling:
     $ ./configure --help (Copied below in full...)
 
-    --disable-vec
-        to compile on cosma4
-
     --with-hydro=<scheme>
         to choose which folder in src/hydro/ to use
+            giant_impacts
+
+    --with-equation-of-state=<EoS>
+        to choose which EoS in src/equation_of_state.h to use
+            Tillotson   (iron only for now)
+
 
 
 Modules:

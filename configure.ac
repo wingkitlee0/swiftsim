@@ -656,7 +656,7 @@ fi
 # Hydro scheme.
 AC_ARG_WITH([hydro],
    [AS_HELP_STRING([--with-hydro=<scheme>],
-      [Hydro dynamics to use @<:@gadget2, minimal, hopkins, default, gizmo, shadowfax debug default: gadget2@:>@]
+      [Hydro dynamics to use @<:@gadget2, minimal, hopkins, default, gizmo, shadowfax, debug, giant_impacts, default: gadget2@:>@]
    )],
    [with_hydro="$withval"],
    [with_hydro="gadget2"]
@@ -683,7 +683,7 @@ case "$with_hydro" in
    shadowfax)
       AC_DEFINE([SHADOWFAX_SPH], [1], [Shadowfax SPH])
    ;;
-   minimal)
+   giant_impacts)
       AC_DEFINE([GIANT_IMPACTS_SPH], [1], [Giant Impacts SPH])
    ;;
 
@@ -750,7 +750,7 @@ esac
 #  Equation of state
 AC_ARG_WITH([equation-of-state],
    [AS_HELP_STRING([--with-equation-of-state=<EoS>],
-      [equation of state @<:@ideal-gas, isothermal-gas default: ideal-gas@:>@]
+      [equation of state @<:@ideal-gas, isothermal-gas, Tillotson, default: ideal-gas@:>@]
    )],
    [with_eos="$withval"],
    [with_eos="ideal-gas"]
@@ -761,6 +761,9 @@ case "$with_eos" in
    ;;
    isothermal-gas)
       AC_DEFINE([EOS_ISOTHERMAL_GAS], [1], [Isothermal gas equation of state])
+   ;;
+   Tillotson)
+      AC_DEFINE([EOS_TILLOTSON], [1], [Tillotson equation of state])
    ;;
    *)
       AC_MSG_ERROR([Unknown equation of state: $with_eos])

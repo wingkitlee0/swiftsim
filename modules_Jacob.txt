@@ -1,0 +1,3 @@
+module unload gnu_comp
+module load swift
+module load swift/c4/gcc/intelmpi/5.1.3

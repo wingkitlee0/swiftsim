@@ -34,6 +34,8 @@ void eos_init(struct eos_parameters *e, const struct swift_params *params) {
 #elif defined(EOS_ISOTHERMAL_GAS)
   e->isothermal_internal_energy =
       parser_get_param_float(params, "EoS:isothermal_internal_energy");
+#elif defined(EOS_TILLOTSON)
+/* nothing to do here */
 #endif
 }
 
@@ -46,6 +48,8 @@ void eos_print(const struct eos_parameters *e) {
       "Equation of state: Isothermal with internal energy "
       "per unit mass set to %f.",
       e->isothermal_internal_energy);
+#elif defined(EOS_TILLOTSON)
+  message("Equation of state: Tillotson.");
 #endif
 
   message("Adiabatic index gamma: %f.", hydro_gamma);
@@ -62,6 +66,8 @@ void eos_print_snapshot(hid_t h_grpsph, const struct eos_parameters *e) {
   io_write_attribute_s(h_grpsph, "Equation of state", "Isothermal gas");
   io_write_attribute_f(h_grpsph, "Thermal energy per unit mass",
                        e->isothermal_internal_energy);
+#elif defined(EOS_TILLOTSON)
+  io_write_attribute_s(h_grpsph, "Equation of state", "Tillotson");
 #endif
 }
 #endif
