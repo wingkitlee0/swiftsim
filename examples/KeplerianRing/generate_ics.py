@@ -46,6 +46,7 @@ class Particles(object):
         self.positions = np.array([])
         self.radii = np.array([])
         self.theta = np.array([])
+        self.phi = np.array([])
         self.velocities = np.array([])
         self.ids = np.array([])
         self.densities = np.array([])
@@ -90,17 +91,71 @@ class Particles(object):
         return self.ids
 
 
-    def convert_polar_to_cartesian(self, centre_of_ring=(5, 5), boxsize):
+    def convert_polar_to_cartesian(self, centre_of_ring=(5, 5), boxsize=None):
         """
         Converts self.radii, self.theta to self.positions.
+
+        If self.phi is set, it also uses that to conver to z.
         """
-        x = self.radii * np.cos(self.theta) + centre_of_ring[0]
-        y = self.radii * np.sin(self.theta) + centre_of_ring[1]
-        z = np.zeros_like(x) + boxsize/2
+        if len(self.phi) == 0:
+            x = self.radii * np.cos(self.theta) + centre_of_ring[0]
+            y = self.radii * np.sin(self.theta) + centre_of_ring[1]
+            z = np.zeros_like(x) + boxsize/2
+        else:
+            x = self.radii * np.cos(self.theta) * np.sin(self.phi) + centre_of_ring[0]
+            y = self.radii * np.sin(self.theta) * np.sin(self.phi) + centre_of_ring[1]
+            try:
+                z = self.radii * np.cos(self.phi) + centre_of_ring[2]
+            except AttributeError:
+                # Just set the central z value to the middle of the box
+                z = self.radii * np.cos(self.phi) + boxsize/2
 
         self.positions = np.array([x, y, z]).T
 
         return self.positions
+
+
+    def convert_cartesian_to_polar(self, centre_of_ring=(5, 5)):
+        """
+        Converts self.positions to self.radii, self.theta, and self.phi.
+        """
+        x, y, z = self.positions.T
+
+        try:
+            x = x - centre_of_ring[0]
+            y = y - centre_of_ring[1]
+            z = z - centre_of_ring[2]
+        except AttributeError:
+            raise AttributeError("Invalid array for centre_of_ring provided.")
+
+        xsquare = x*x
+        ysquare = y*y
+        zsquare = z*z
+
+        r = np.sqrt(xsquare + ysquare + zsquare)
+
+        # We need to mask over the x = 0 cases (theta = 0).
+        mask = (x == 0)
+
+        masked_x = np.ma.array(x, mask=mask)
+        theta_for_unmasked = np.arctan(y/masked_x)
+
+        theta = theta_for_unmasked + mask * 0
+
+        # We need to mask over the z=0 cases (phi = pi/2)
+        mask = (z == 0)
+
+        masked_z = np.ma.array(z, mask=mask)
+        phi_for_unmasked = np.arctan(np.sqrt(xsquare + ysquare)/masked_z)
+
+        phi = phi_for_unmasked + mask * np.pi / 2
+
+
+        self.radii = r
+        self.theta = theta
+        self.phi = phi
+
+        return r, theta, phi
 
 
     def exclude_particles(self, range):
@@ -155,7 +210,29 @@ class Particles(object):
         self.radii = np.ma.array(self.radii, mask=mask).compressed()
         self.theta = np.ma.array(self.theta, mask=mask).compressed()
 
+        try:
+            self.phi = np.ma.array(self.phi, mask=mask).compressed()
+        except np.ma.core.MaskError:
+            # We have not allocated our phis,
+            pass
+
         self.nparts = len(self.radii)
+
+        return
+
+
+    def tilt_particles(self, angle, center=(5, 5, 5)):
+        """
+        Tilts the particles around the x-axis around the point given.
+
+        Assumes that the particles already have set r, theta, phi.
+        """
+        x, y, z = self.positions.T
+        angle_radians = angle * np.pi / 180
+        new_z = z + (x - center[0]) * np.tan(angle_radians)
+        
+        self.positions = np.array([x, y, new_z]).T
+        self.convert_cartesian_to_polar(center)
 
         return
 
@@ -386,7 +463,7 @@ def gen_particles_spiral(meta):
     object. Based on Cartwright, Stamatellos & Whitworth (2009).
     """
     particles = Particles(meta)
-    centre_of_ring = (meta["boxsize"]/2., meta["boxsize"]/2.)
+    centre_of_ring = (meta["boxsize"]/2., meta["boxsize"]/2., meta["boxsize"]/2.)
     max_r = meta["boxsize"]/2.
 
 
@@ -395,8 +472,16 @@ def gen_particles_spiral(meta):
     theta = generate_theta(r)
 
     particles.radii, particles.theta = QSP_fix(r, theta)
+    # We must do this afterwards as QSP does not always return the same number of parts.
+    phi = np.zeros_like(particles.theta) + np.pi/2
+    particles.phi = phi
+
     particles.convert_polar_to_cartesian(centre_of_ring, meta["boxsize"])
+    phi = np.zeros_like(particles.theta)
+    particles.phi = phi
     particles.nparts = len(particles.radii)
+
+    np.savetxt("log.txt", particles.positions)
     
     particles.exclude_particles((particles.softening, 100.))
     
@@ -405,6 +490,10 @@ def gen_particles_spiral(meta):
     particles.calculate_masses()
 
     particles.generate_ids()
+
+    if meta["angle"]:
+        particles.tilt_particles(meta["angle"], centre_of_ring)
+
 
     return particles
 
@@ -539,10 +628,6 @@ if __name__ == "__main__":
     ### --- ### --- Argument Parsing --- ### --- ###
 
     ARGS = vars(PARSER.parse_args())
-
-    if ARGS["angle"]:
-        print("Varing angles are not yet implemented.")
-        raise NotImplementedError
 
     if ARGS["generationmethod"] == "grid":
         gen_particles = gen_particles_grid
