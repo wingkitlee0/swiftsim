@@ -429,7 +429,7 @@ def gen_particles_grid(meta):
     """
     particles = Particles(meta)
     range = (0, meta["boxsize"])
-    centre_of_ring = (meta["boxsize"]/2., meta["boxsize"]/2.)
+    centre_of_ring = [meta["boxsize"]/2.] * 3
 
     # Because we are using a uniform grid we actually use the same x and y
     # range for the initial particle setup.
@@ -453,6 +453,9 @@ def gen_particles_grid(meta):
     particles.calculate_masses()
 
     particles.generate_ids()
+
+    if meta["angle"]:
+        particles.tilt_particles(meta["angle"], centre_of_ring)
 
     return particles
 
