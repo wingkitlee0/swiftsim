@@ -484,8 +484,6 @@ def gen_particles_spiral(meta):
     particles.phi = phi
     particles.nparts = len(particles.radii)
 
-    np.savetxt("log.txt", particles.positions)
-    
     particles.exclude_particles((particles.softening, 100.))
     
     particles.densities = sigma(particles.radii)
