@@ -66,17 +66,25 @@ class Particles(object):
         return self.masses
    
 
-    def calculate_velocities(self):
+    def calculate_velocities(self, angle=0):
         """
         Calculates keplerian orbit velocities for the, well, keplerian ring.
-        Requires that radius and theta are set already.
+        Requires that radius and phi are set already.
+
+        Please give angle in radians.
         """
         force_modifier = np.sqrt(self.gravitymass / (self.radii**2 + self.softening**2)**(3/2)) * self.radii 
-        
-        v_x = force_modifier * (-np.sin(self.theta))
-        v_y = force_modifier * (np.cos(self.theta))
+        try:
+            v_x = force_modifier * (np.sin(self.theta)*np.sin(self.phi)*np.cos(angle) - np.cos(self.phi)*np.sin(angle))
+        except ValueError:
+            # Phi are not yet set. Make them and then move on to v_x
+            self.phi = np.zeros_like(self.theta) + np.pi / 2
+            v_x = force_modifier * (np.sin(self.theta)*np.sin(self.phi)*np.cos(angle) - np.cos(self.phi)*np.sin(angle))
+
+        v_y = force_modifier * (-np.cos(self.theta)*np.sin(self.phi)*np.cos(angle))
+        v_z = force_modifier * (np.cos(self.theta) * np.sin(self.phi)*np.sin(angle))
                     
-        self.velocities = np.array([v_x, v_y, np.zeros_like(v_x)]).T
+        self.velocities = np.array([v_x, v_y, v_z]).T
 
         return self.velocities
 
@@ -233,6 +241,8 @@ class Particles(object):
         
         self.positions = np.array([x, y, new_z]).T
         self.convert_cartesian_to_polar(center)
+
+        self.calculate_velocities(angle=angle_radians)
 
         return
 
