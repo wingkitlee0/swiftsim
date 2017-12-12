@@ -75,16 +75,21 @@ class Particles(object):
         """
         force_modifier = np.sqrt(self.gravitymass / (self.radii**2 + self.softening**2)**(3/2)) * self.radii 
         try:
-            v_x = force_modifier * (np.sin(self.theta)*np.sin(self.phi)*np.cos(angle) - np.cos(self.phi)*np.sin(angle))
+            v_x = np.sin(self.theta) * np.sin(self.phi) * np.cos(angle)
         except ValueError:
             # Phi are not yet set. Make them and then move on to v_x
+            if angle:
+                raise ValueError("Unable to find phi.")
+            
+            # If we have angle of inclination 0 we can set phi.
             self.phi = np.zeros_like(self.theta) + np.pi / 2
-            v_x = force_modifier * (np.sin(self.theta)*np.sin(self.phi)*np.cos(angle) - np.cos(self.phi)*np.sin(angle))
+            v_x = np.sin(self.theta) * np.sin(self.phi) * np.cos(angle)
 
-        v_y = force_modifier * (-np.cos(self.theta)*np.sin(self.phi)*np.cos(angle))
-        v_z = force_modifier * (np.cos(self.theta) * np.sin(self.phi)*np.sin(angle))
-                    
-        self.velocities = np.array([v_x, v_y, v_z]).T
+        v_y = np.cos(self.phi) * np.sin(angle) - np.cos(self.theta) * np.sin(self.phi) * np.cos(angle)
+        v_z = np.sin(self.theta) * np.sin(self.phi) * np.sin(angle)
+
+
+        self.velocities = (force_modifier * np.array([v_x, v_y, v_z])).T
 
         return self.velocities
 
@@ -143,20 +148,15 @@ class Particles(object):
         r = np.sqrt(xsquare + ysquare + zsquare)
 
         # We need to mask over the x = 0 cases (theta = 0).
-        mask = (x == 0)
+        mask = np.isclose(x, 0, 1e-12)
 
         masked_x = np.ma.array(x, mask=mask)
         theta_for_unmasked = np.arctan(y/masked_x)
 
         theta = theta_for_unmasked + mask * 0
 
-        # We need to mask over the z=0 cases (phi = pi/2)
-        mask = (z == 0)
-
-        masked_z = np.ma.array(z, mask=mask)
-        phi_for_unmasked = np.arctan(np.sqrt(xsquare + ysquare)/masked_z)
-
-        phi = phi_for_unmasked + mask * np.pi / 2
+        # Thankfully we have already ensured that r != 0.
+        phi = np.arccos(z/r)
 
 
         self.radii = r
@@ -164,6 +164,17 @@ class Particles(object):
         self.phi = phi
 
         return r, theta, phi
+
+
+    def wiggle_positions(self, tol=1e-6):
+        """
+        'Wiggle' the positions to avoid precision issues.
+        
+        Note that this does not touch r, theta, phi.
+        """
+        self.positions += np.random.random(self.positions.shape) * tol
+
+        return
 
 
     def exclude_particles(self, range):
@@ -239,7 +250,8 @@ class Particles(object):
         angle_radians = angle * np.pi / 180
         new_z = z + (x - center[0]) * np.tan(angle_radians)
         
-        self.positions = np.array([x, y, new_z]).T
+        self.positions = (np.array([x, y, new_z]).T).astype(np.float128)
+        self.wiggle_positions()
         self.convert_cartesian_to_polar(center)
 
         self.calculate_velocities(angle=angle_radians)
