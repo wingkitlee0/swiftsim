@@ -524,7 +524,6 @@ def gen_particles_spiral(meta):
 if __name__ == "__main__":
     import argparse as ap
 
-    # TODO: Add these descriptions
     PARSER = ap.ArgumentParser(
         description="""
                     Initial conditions generator for the Keplerian Ring
