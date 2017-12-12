@@ -87,7 +87,7 @@ class Particles(object):
 
         v_y = np.cos(self.phi) * np.sin(angle) - np.cos(self.theta) * np.sin(self.phi) * np.cos(angle)
         v_z = np.sin(self.theta) * np.sin(self.phi) * np.sin(angle)
-
+        print(max(self.phi), min(self.phi))
 
         self.velocities = (force_modifier * np.array([v_x, v_y, v_z])).T
 
@@ -148,10 +148,10 @@ class Particles(object):
         r = np.sqrt(xsquare + ysquare + zsquare)
 
         # We need to mask over the x = 0 cases (theta = 0).
-        mask = np.isclose(x, 0, 1e-12)
+        mask = np.isclose(x, 0, 1e-6)
 
         masked_x = np.ma.array(x, mask=mask)
-        theta_for_unmasked = np.arctan(y/masked_x)
+        theta_for_unmasked = np.arctan2(y, masked_x)
 
         theta = theta_for_unmasked + mask * 0
 
@@ -166,7 +166,7 @@ class Particles(object):
         return r, theta, phi
 
 
-    def wiggle_positions(self, tol=1e-6):
+    def wiggle_positions(self, tol=1e-3):
         """
         'Wiggle' the positions to avoid precision issues.
         
