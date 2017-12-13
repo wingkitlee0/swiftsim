@@ -272,30 +272,10 @@ class Particles(object):
 
 
     def save_to_gadget(self, filename, boxsize=10.):
-        """ Save the particle data to a GADGET .hdf5 file.
+        """
+        Save the particle data to a GADGET .hdf5 file.
 
-        @param: filename | string
-        - filename of the hdf5 file to save.
-
-        @param: x_i | array-like
-        - x positions of the particles
-
-        @param: y_i | array-like
-        - y positions of the particles
-
-        @param: v_x_i | array-like
-        - x velocities of the particles
-
-        @param: v_y_i | array-like
-        - y velocities of the particles
-
-        @param: hsml | float
-        - smoothing length of the particles.
-
-        @param: pm | float
-        - mass of the particles.
-
-        -----------------------------------------------------------------------
+        Uses the internal options, but you must specify a filename.
         """
         with h5.File(filename, "w") as handle:
             wg.write_header(
@@ -653,6 +633,9 @@ if __name__ == "__main__":
         "--angle",
         help="""
              Angle of incline on the disk (degrees). Default: 0.
+             Note that tilting the ring may cause some issues at the
+             disk boundary as the 'box' is no longer filled with
+             particles.
              """,
         required=False,
         default=0.
