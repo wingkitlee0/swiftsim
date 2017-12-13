@@ -87,7 +87,6 @@ class Particles(object):
 
         v_y = np.cos(self.phi) * np.sin(angle) - np.cos(self.theta) * np.sin(self.phi) * np.cos(angle)
         v_z = np.sin(self.theta) * np.sin(self.phi) * np.sin(angle)
-        print(max(self.phi), min(self.phi))
 
         self.velocities = (force_modifier * np.array([v_x, v_y, v_z])).T
 
@@ -246,11 +245,24 @@ class Particles(object):
 
         Assumes that the particles already have set r, theta, phi.
         """
-        x, y, z = self.positions.T
         angle_radians = angle * np.pi / 180
-        new_z = z + (x - center[0]) * np.tan(angle_radians)
+        rotation_matrix = np.array(
+            [
+                [  np.cos(angle_radians), 0, np.sin(angle_radians)  ],
+                [            0,           1,          0             ],
+                [ -np.sin(angle_radians), 0, np.cos(angle_radians)  ]
+            ]
+        )
+
+        self.positions = (
+            (
+                np.matmul(
+                    rotation_matrix,
+                    self.positions.T
+                )
+            ).T
+        ).astype(np.float128)
         
-        self.positions = (np.array([x, y, new_z]).T).astype(np.float128)
         self.wiggle_positions()
         self.convert_cartesian_to_polar(center)
 
