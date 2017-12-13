@@ -586,10 +586,10 @@ if __name__ == "__main__":
         "--smoothing",
         help="""
              Initial smoothing length for all of the particles.
-             Default: 0.89.
+             Default: Boxsize/N
              """,
         required=False,
-        default=0.89,
+        default=-1,
     )
     
     PARSER.add_argument(
@@ -658,11 +658,18 @@ if __name__ == "__main__":
         )
         exit(1)
 
+
+    if ARGS["smoothing"] == "-1":
+        smoothing = float(ARGS["boxsize"]) / int(ARGS["nparts"])
+    else:
+        smoothing = float(ARGS["smoothing"])
+
+
     META = {
         "gravitymass": float(ARGS["gravitymass"]),
         "nparts": int(ARGS["nparts"]),
         "particlemass": float(ARGS["particlemass"]),
-        "smoothing": float(ARGS["smoothing"]),
+        "smoothing": smoothing,
         "softening": float(ARGS["softening"]),
         "internalenergy": float(ARGS["internalenergy"]),
         "boxsize": float(ARGS["boxsize"]),
