@@ -26,7 +26,8 @@
 /* Local headers. */
 #include "active.h"
 
-#ifdef WITH_VECTORIZATION
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
+
 static const vector kernel_gamma2_vec = FILL_VEC(kernel_gamma2);
 
 /**
@@ -384,8 +385,7 @@ __attribute__((always_inline)) INLINE static void populate_max_index_no_cache(
  * @param rshift cutoff shift
  * @param hi_max_raw Maximal smoothing length in cell ci
  * @param hj_max_raw Maximal smoothing length in cell cj
- * @param hi_max Maximal smoothing length in cell ci scaled by kernel_gamma
- * @param hj_max Maximal smoothing length in cell cj scaled by kernel_gamma
+ * @param h_max Maximal smoothing length in both cells scaled by kernel_gamma
  * @param di_max Maximal position on the axis that can interact in cell ci
  * @param dj_min Minimal position on the axis that can interact in cell ci
  * @param max_index_i array to hold the maximum distances of pi particles into
@@ -397,16 +397,13 @@ __attribute__((always_inline)) INLINE static void populate_max_index_no_cache(
  * @param max_active_bin The largest time-bin active during this step.
  */
 __attribute__((always_inline)) INLINE static void
-populate_max_index_no_cache_force(const struct cell *ci, const struct cell *cj,
-                                  const struct entry *restrict sort_i,
-                                  const struct entry *restrict sort_j,
-                                  const float dx_max, const float rshift,
-                                  const double hi_max_raw,
-                                  const double hj_max_raw, const double hi_max,
-                                  const double hj_max, const double di_max,
-                                  const double dj_min, int *max_index_i,
-                                  int *max_index_j, int *init_pi, int *init_pj,
-                                  const timebin_t max_active_bin) {
+populate_max_index_no_cache_force(
+    const struct cell *ci, const struct cell *cj,
+    const struct entry *restrict sort_i, const struct entry *restrict sort_j,
+    const float dx_max, const float rshift, const double hi_max_raw,
+    const double hj_max_raw, const double h_max, const double di_max,
+    const double dj_min, int *max_index_i, int *max_index_j, int *init_pi,
+    int *init_pj, const timebin_t max_active_bin) {
 
   const struct part *restrict parts_i = ci->parts;
   const struct part *restrict parts_j = cj->parts;
@@ -419,7 +416,7 @@ populate_max_index_no_cache_force(const struct cell *ci, const struct cell *cj,
   first_pi = ci->count;
   int active_id = first_pi - 1;
   while (first_pi > 0 &&
-         sort_i[first_pi - 1].d + dx_max + max(hi_max, hj_max) > dj_min) {
+         sort_i[first_pi - 1].d + dx_max + h_max - rshift > dj_min) {
     first_pi--;
     /* Store the index of the particle if it is active. */
     if (part_is_active_no_debug(&parts_i[sort_i[first_pi].i], max_active_bin))
@@ -469,7 +466,7 @@ populate_max_index_no_cache_force(const struct cell *ci, const struct cell *cj,
   last_pj = -1;
   active_id = last_pj;
   while (last_pj < cj->count &&
-         sort_j[last_pj + 1].d - max(hj_max, hi_max) - dx_max < di_max) {
+         sort_j[last_pj + 1].d - h_max - dx_max < di_max) {
     last_pj++;
     /* Store the index of the particle if it is active. */
     if (part_is_active_no_debug(&parts_j[sort_j[last_pj].i], max_active_bin))
@@ -515,7 +512,7 @@ populate_max_index_no_cache_force(const struct cell *ci, const struct cell *cj,
   *init_pj = last_pj;
 }
 
-#endif /* WITH_VECTORIZATION */
+#endif /* WITH_VECTORIZATION && GADGET2_SPH */
 
 /**
  * @brief Compute the cell self-interaction (non-symmetric) using vector
@@ -527,7 +524,8 @@ populate_max_index_no_cache_force(const struct cell *ci, const struct cell *cj,
 __attribute__((always_inline)) INLINE void runner_doself1_density_vec(
     struct runner *r, struct cell *restrict c) {
 
-#ifdef WITH_VECTORIZATION
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
+
   /* Get some local variables */
   const struct engine *e = r->e;
   const timebin_t max_active_bin = e->max_active_bin;
@@ -553,16 +551,13 @@ __attribute__((always_inline)) INLINE void runner_doself1_density_vec(
    * the cache if it is not big enough for the cell. */
   struct cache *restrict cell_cache = &r->ci_cache;
 
-  if (cell_cache->count < count) {
-    cache_init(cell_cache, count);
-  }
+  if (cell_cache->count < count) cache_init(cell_cache, count);
 
   /* Read the particles from the cell and store them locally in the cache. */
   cache_read_particles(c, cell_cache);
 
   /* Create secondary cache to store particle interactions. */
   struct c2_cache int_cache;
-  int icount = 0, icount_align = 0;
 
   /* Loop over the particles in the cell. */
   for (int pid = 0; pid < count; pid++) {
@@ -615,6 +610,10 @@ __attribute__((always_inline)) INLINE void runner_doself1_density_vec(
       }
     }
 
+    /* The number of interactions for pi and the padded version of it to
+     * make it a multiple of VEC_SIZE. */
+    int icount = 0, icount_align = 0;
+
     /* Find all of particle pi's interacions and store needed values in the
      * secondary cache.*/
     for (int pjd = 0; pjd < count_align; pjd += (NUM_VEC_PROC * VEC_SIZE)) {
@@ -664,6 +663,24 @@ __attribute__((always_inline)) INLINE void runner_doself1_density_vec(
                            vec_is_mask_true(v_doi_mask_self_check);
       const int doi_mask2 = vec_is_mask_true(v_doi_mask2) &
                             vec_is_mask_true(v_doi_mask2_self_check);
+
+#ifdef DEBUG_INTERACTIONS_SPH
+      for (int bit_index = 0; bit_index < VEC_SIZE; bit_index++) {
+        if (doi_mask & (1 << bit_index)) {
+          if (pi->num_ngb_density < MAX_NUM_OF_NEIGHBOURS)
+            pi->ids_ngbs_density[pi->num_ngb_density] =
+                parts[pjd + bit_index].id;
+          ++pi->num_ngb_density;
+        }
+
+        if (doi_mask2 & (1 << bit_index)) {
+          if (pi->num_ngb_density < MAX_NUM_OF_NEIGHBOURS)
+            pi->ids_ngbs_density[pi->num_ngb_density] =
+                parts[pjd + VEC_SIZE + bit_index].id;
+          ++pi->num_ngb_density;
+        }
+      }
+#endif
 
       /* If there are any interactions left pack interaction values into c2
        * cache. */
@@ -722,6 +739,11 @@ __attribute__((always_inline)) INLINE void runner_doself1_density_vec(
   } /* loop over all particles. */
 
   TIMER_TOC(timer_doself_density);
+
+#else
+
+  error("Incorrectly calling vectorized Gadget-2 functions!");
+
 #endif /* WITH_VECTORIZATION */
 }
 
@@ -739,25 +761,23 @@ __attribute__((always_inline)) INLINE void runner_doself_subset_density_vec(
     struct runner *r, struct cell *restrict c, struct part *restrict parts,
     int *restrict ind, int pi_count) {
 
-#ifdef WITH_VECTORIZATION
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
+
   const int count = c->count;
 
-  TIMER_TIC
+  TIMER_TIC;
 
   /* Get the particle cache from the runner and re-allocate
    * the cache if it is not big enough for the cell. */
   struct cache *restrict cell_cache = &r->ci_cache;
 
-  if (cell_cache->count < count) {
-    cache_init(cell_cache, count);
-  }
+  if (cell_cache->count < count) cache_init(cell_cache, count);
 
   /* Read the particles from the cell and store them locally in the cache. */
   cache_read_particles(c, cell_cache);
 
   /* Create secondary cache to store particle interactions. */
   struct c2_cache int_cache;
-  int icount = 0, icount_align = 0;
 
   /* Loop over the subset of particles in the parts that need updating. */
   for (int pid = 0; pid < pi_count; pid++) {
@@ -814,6 +834,10 @@ __attribute__((always_inline)) INLINE void runner_doself_subset_density_vec(
       }
     }
 
+    /* The number of interactions for pi and the padded version of it to
+     * make it a multiple of VEC_SIZE. */
+    int icount = 0, icount_align = 0;
+
     /* Find all of particle pi's interacions and store needed values in the
      * secondary cache.*/
     for (int pjd = 0; pjd < count_align; pjd += (NUM_VEC_PROC * VEC_SIZE)) {
@@ -865,6 +889,24 @@ __attribute__((always_inline)) INLINE void runner_doself_subset_density_vec(
                            vec_is_mask_true(v_doi_mask_self_check);
       const int doi_mask2 = vec_is_mask_true(v_doi_mask2) &
                             vec_is_mask_true(v_doi_mask2_self_check);
+
+#ifdef DEBUG_INTERACTIONS_SPH
+      for (int bit_index = 0; bit_index < VEC_SIZE; bit_index++) {
+        if (doi_mask & (1 << bit_index)) {
+          if (pi->num_ngb_density < MAX_NUM_OF_NEIGHBOURS)
+            pi->ids_ngbs_density[pi->num_ngb_density] =
+                parts[pjd + bit_index].id;
+          ++pi->num_ngb_density;
+        }
+
+        if (doi_mask2 & (1 << bit_index)) {
+          if (pi->num_ngb_density < MAX_NUM_OF_NEIGHBOURS)
+            pi->ids_ngbs_density[pi->num_ngb_density] =
+                parts[pjd + VEC_SIZE + bit_index].id;
+          ++pi->num_ngb_density;
+        }
+      }
+#endif
 
       /* If there are any interactions left pack interaction values into c2
        * cache. */
@@ -923,6 +965,11 @@ __attribute__((always_inline)) INLINE void runner_doself_subset_density_vec(
   } /* loop over all particles. */
 
   TIMER_TOC(timer_doself_subset);
+
+#else
+
+  error("Incorrectly calling vectorized Gadget-2 functions!");
+
 #endif /* WITH_VECTORIZATION */
 }
 
@@ -936,13 +983,10 @@ __attribute__((always_inline)) INLINE void runner_doself_subset_density_vec(
 __attribute__((always_inline)) INLINE void runner_doself2_force_vec(
     struct runner *r, struct cell *restrict c) {
 
-#ifdef WITH_VECTORIZATION
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
+
   const struct engine *e = r->e;
-  struct part *restrict pi;
-  int count_align;
-
   const timebin_t max_active_bin = e->max_active_bin;
-
   struct part *restrict parts = c->parts;
   const int count = c->count;
 
@@ -964,9 +1008,7 @@ __attribute__((always_inline)) INLINE void runner_doself2_force_vec(
    * the cache if it is not big enough for the cell. */
   struct cache *restrict cell_cache = &r->ci_cache;
 
-  if (cell_cache->count < count) {
-    cache_init(cell_cache, count);
-  }
+  if (cell_cache->count < count) cache_init(cell_cache, count);
 
   /* Read the particles from the cell and store them locally in the cache. */
   cache_read_force_particles(c, cell_cache);
@@ -975,7 +1017,7 @@ __attribute__((always_inline)) INLINE void runner_doself2_force_vec(
   for (int pid = 0; pid < count; pid++) {
 
     /* Get a pointer to the ith particle. */
-    pi = &parts[pid];
+    struct part *restrict pi = &parts[pid];
 
     /* Is the ith particle active? */
     if (!part_is_active_no_debug(pi, max_active_bin)) continue;
@@ -1012,7 +1054,7 @@ __attribute__((always_inline)) INLINE void runner_doself2_force_vec(
     vector v_entropy_dtSum = vector_setzero();
 
     /* Pad cache if there is a serial remainder. */
-    count_align = count;
+    int count_align = count;
     int rem = count % VEC_SIZE;
     if (rem != 0) {
       int pad = VEC_SIZE - rem;
@@ -1070,6 +1112,16 @@ __attribute__((always_inline)) INLINE void runner_doself2_force_vec(
       /* Combine all 3 masks. */
       vec_combine_masks(v_doi_mask, v_doi_mask_self_check);
 
+#ifdef DEBUG_INTERACTIONS_SPH
+      for (int bit_index = 0; bit_index < VEC_SIZE; bit_index++) {
+        if (vec_is_mask_true(v_doi_mask) & (1 << bit_index)) {
+          if (pi->num_ngb_force < MAX_NUM_OF_NEIGHBOURS)
+            pi->ids_ngbs_force[pi->num_ngb_force] = parts[pjd + bit_index].id;
+          ++pi->num_ngb_force;
+        }
+      }
+#endif
+
       /* If there are any interactions perform them. */
       if (vec_is_mask_true(v_doi_mask)) {
         vector v_hj_inv = vec_reciprocal(hj);
@@ -1101,6 +1153,11 @@ __attribute__((always_inline)) INLINE void runner_doself2_force_vec(
   } /* loop over all particles. */
 
   TIMER_TOC(timer_doself_force);
+
+#else
+
+  error("Incorrectly calling vectorized Gadget-2 functions!");
+
 #endif /* WITH_VECTORIZATION */
 }
 
@@ -1118,7 +1175,8 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
                                 struct cell *cj, const int sid,
                                 const double *shift) {
 
-#ifdef WITH_VECTORIZATION
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
+
   const struct engine *restrict e = r->e;
   const timebin_t max_active_bin = e->max_active_bin;
 
@@ -1188,16 +1246,12 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
   struct cache *restrict ci_cache = &r->ci_cache;
   struct cache *restrict cj_cache = &r->cj_cache;
 
-  if (ci_cache->count < count_i) {
-    cache_init(ci_cache, count_i);
-  }
-  if (cj_cache->count < count_j) {
-    cache_init(cj_cache, count_j);
-  }
+  if (ci_cache->count < count_i) cache_init(ci_cache, count_i);
+  if (cj_cache->count < count_j) cache_init(cj_cache, count_j);
 
   int first_pi, last_pj;
-  int *max_index_i __attribute__((aligned(sizeof(int) * VEC_SIZE)));
-  int *max_index_j __attribute__((aligned(sizeof(int) * VEC_SIZE)));
+  int *restrict max_index_i SWIFT_CACHE_ALIGN;
+  int *restrict max_index_j SWIFT_CACHE_ALIGN;
 
   max_index_i = r->ci_cache.max_index;
   max_index_j = r->cj_cache.max_index;
@@ -1210,8 +1264,8 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
                               &first_pi, &last_pj, max_active_bin);
 
   /* Limits of the outer loops. */
-  int first_pi_loop = first_pi;
-  int last_pj_loop = last_pj;
+  const int first_pi_loop = first_pi;
+  const int last_pj_loop_end = last_pj + 1;
 
   /* Take the max/min of both values calculated to work out how many particles
    * to read into the cache. */
@@ -1244,7 +1298,7 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
       if (di_test < dj_min) continue;
 
       /* Determine the exit iteration of the interaction loop. */
-      const int exit_iteration = max_index_i[pid];
+      const int exit_iteration_end = max_index_i[pid] + 1;
 
       /* Fill particle pi vectors. */
       const vector v_pix = vector_set1(ci_cache->x[ci_cache_idx]);
@@ -1274,7 +1328,7 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
       /* Loop over the parts in cj. Making sure to perform an iteration of the
        * loop even if exit_iteration_align is zero and there is only one
        * particle to interact with.*/
-      for (int pjd = 0; pjd <= exit_iteration; pjd += VEC_SIZE) {
+      for (int pjd = 0; pjd < exit_iteration_end; pjd += VEC_SIZE) {
 
         /* Get the cache index to the jth particle. */
         const int cj_cache_idx = pjd;
@@ -1308,6 +1362,17 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
         /* Form r2 < hig2 mask. */
         vec_create_mask(v_doi_mask, vec_cmp_lt(v_r2.v, v_hig2.v));
 
+#ifdef DEBUG_INTERACTIONS_SPH
+        for (int bit_index = 0; bit_index < VEC_SIZE; bit_index++) {
+          if (vec_is_mask_true(v_doi_mask) & (1 << bit_index)) {
+            if (pi->num_ngb_density < MAX_NUM_OF_NEIGHBOURS)
+              pi->ids_ngbs_density[pi->num_ngb_density] =
+                  parts_j[sort_j[pjd + bit_index].i].id;
+            ++pi->num_ngb_density;
+          }
+        }
+#endif
+
         /* If there are any interactions perform them. */
         if (vec_is_mask_true(v_doi_mask))
           runner_iact_nonsym_1_vec_density(
@@ -1336,7 +1401,7 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
   if (active_cj) {
 
     /* Loop over the parts in cj until nothing is within range in ci. */
-    for (int pjd = 0; pjd <= last_pj_loop; pjd++) {
+    for (int pjd = 0; pjd < last_pj_loop_end; pjd++) {
 
       /* Get a hold of the jth part in cj. */
       struct part *restrict pj = &parts_j[sort_j[pjd].i];
@@ -1423,6 +1488,17 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
         /* Form r2 < hig2 mask. */
         vec_create_mask(v_doj_mask, vec_cmp_lt(v_r2.v, v_hjg2.v));
 
+#ifdef DEBUG_INTERACTIONS_SPH
+        for (int bit_index = 0; bit_index < VEC_SIZE; bit_index++) {
+          if (vec_is_mask_true(v_doj_mask) & (1 << bit_index)) {
+            if (pj->num_ngb_density < MAX_NUM_OF_NEIGHBOURS)
+              pj->ids_ngbs_density[pj->num_ngb_density] =
+                  parts_i[sort_i[ci_cache_idx + first_pi + bit_index].i].id;
+            ++pj->num_ngb_density;
+          }
+        }
+#endif
+
         /* If there are any interactions perform them. */
         if (vec_is_mask_true(v_doj_mask))
           runner_iact_nonsym_1_vec_density(
@@ -1450,6 +1526,10 @@ void runner_dopair1_density_vec(struct runner *r, struct cell *ci,
 
   TIMER_TOC(timer_dopair_density);
 
+#else
+
+  error("Incorrectly calling vectorized Gadget-2 functions!");
+
 #endif /* WITH_VECTORIZATION */
 }
 
@@ -1467,7 +1547,8 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
                               struct cell *cj, const int sid,
                               const double *shift) {
 
-#ifdef WITH_VECTORIZATION
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
+
   const struct engine *restrict e = r->e;
   const timebin_t max_active_bin = e->max_active_bin;
 
@@ -1484,7 +1565,7 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
   /* Get some other useful values. */
   const int count_i = ci->count;
   const int count_j = cj->count;
-  const double hi_max = ci->h_max * kernel_gamma - rshift;
+  const double hi_max = ci->h_max * kernel_gamma;
   const double hj_max = cj->h_max * kernel_gamma;
   const double hi_max_raw = ci->h_max;
   const double hj_max_raw = cj->h_max;
@@ -1515,7 +1596,7 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
 
   if (active_ci) {
     for (int pid = count_i - 1;
-         pid >= 0 && sort_i[pid].d + h_max + dx_max > dj_min; pid--) {
+         pid >= 0 && sort_i[pid].d + h_max + dx_max - rshift > dj_min; pid--) {
       struct part *restrict pi = &parts_i[sort_i[pid].i];
       if (part_is_active(pi, e)) {
         numActive++;
@@ -1543,16 +1624,12 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
   struct cache *restrict ci_cache = &r->ci_cache;
   struct cache *restrict cj_cache = &r->cj_cache;
 
-  if (ci_cache->count < count_i) {
-    cache_init(ci_cache, count_i);
-  }
-  if (cj_cache->count < count_j) {
-    cache_init(cj_cache, count_j);
-  }
+  if (ci_cache->count < count_i) cache_init(ci_cache, count_i);
+  if (cj_cache->count < count_j) cache_init(cj_cache, count_j);
 
   int first_pi, last_pj;
-  int *max_index_i SWIFT_CACHE_ALIGN;
-  int *max_index_j SWIFT_CACHE_ALIGN;
+  int *restrict max_index_i SWIFT_CACHE_ALIGN;
+  int *restrict max_index_j SWIFT_CACHE_ALIGN;
 
   max_index_i = r->ci_cache.max_index;
   max_index_j = r->cj_cache.max_index;
@@ -1561,13 +1638,13 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
   /* Also find the first pi that interacts with any particle in cj and the last
    * pj that interacts with any particle in ci. */
   populate_max_index_no_cache_force(ci, cj, sort_i, sort_j, dx_max, rshift,
-                                    hi_max_raw, hj_max_raw, hi_max, hj_max,
-                                    di_max, dj_min, max_index_i, max_index_j,
-                                    &first_pi, &last_pj, max_active_bin);
+                                    hi_max_raw, hj_max_raw, h_max, di_max,
+                                    dj_min, max_index_i, max_index_j, &first_pi,
+                                    &last_pj, max_active_bin);
 
   /* Limits of the outer loops. */
   const int first_pi_loop = first_pi;
-  const int last_pj_loop = last_pj;
+  const int last_pj_loop_end = last_pj + 1;
 
   /* Take the max/min of both values calculated to work out how many particles
    * to read into the cache. */
@@ -1600,7 +1677,7 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
       if (di_test < dj_min) continue;
 
       /* Determine the exit iteration of the interaction loop. */
-      const int exit_iteration = max_index_i[pid];
+      const int exit_iteration_end = max_index_i[pid] + 1;
 
       /* Fill particle pi vectors. */
       const vector v_pix = vector_set1(ci_cache->x[ci_cache_idx]);
@@ -1633,7 +1710,7 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
       /* Loop over the parts in cj. Making sure to perform an iteration of the
        * loop even if exit_iteration_align is zero and there is only one
        * particle to interact with.*/
-      for (int pjd = 0; pjd <= exit_iteration; pjd += VEC_SIZE) {
+      for (int pjd = 0; pjd < exit_iteration_end; pjd += VEC_SIZE) {
 
         /* Get the cache index to the jth particle. */
         const int cj_cache_idx = pjd;
@@ -1672,6 +1749,17 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
         v_h2.v = vec_fmax(v_hig2.v, v_hjg2.v);
         vec_create_mask(v_doi_mask, vec_cmp_lt(v_r2.v, v_h2.v));
 
+#ifdef DEBUG_INTERACTIONS_SPH
+        for (int bit_index = 0; bit_index < VEC_SIZE; bit_index++) {
+          if (vec_is_mask_true(v_doi_mask) & (1 << bit_index)) {
+            if (pi->num_ngb_force < MAX_NUM_OF_NEIGHBOURS)
+              pi->ids_ngbs_force[pi->num_ngb_force] =
+                  parts_j[sort_j[pjd + bit_index].i].id;
+            ++pi->num_ngb_force;
+          }
+        }
+#endif
+
         /* If there are any interactions perform them. */
         if (vec_is_mask_true(v_doi_mask)) {
           vector v_hj_inv = vec_reciprocal(v_hj);
@@ -1705,7 +1793,7 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
   if (active_cj) {
 
     /* Loop over the parts in cj until nothing is within range in ci. */
-    for (int pjd = 0; pjd <= last_pj_loop; pjd++) {
+    for (int pjd = 0; pjd < last_pj_loop_end; pjd++) {
 
       /* Get a hold of the jth part in cj. */
       struct part *restrict pj = &parts_j[sort_j[pjd].i];
@@ -1797,6 +1885,17 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
         v_h2.v = vec_fmax(v_hjg2.v, v_hig2.v);
         vec_create_mask(v_doj_mask, vec_cmp_lt(v_r2.v, v_h2.v));
 
+#ifdef DEBUG_INTERACTIONS_SPH
+        for (int bit_index = 0; bit_index < VEC_SIZE; bit_index++) {
+          if (vec_is_mask_true(v_doj_mask) & (1 << bit_index)) {
+            if (pj->num_ngb_force < MAX_NUM_OF_NEIGHBOURS)
+              pj->ids_ngbs_force[pj->num_ngb_force] =
+                  parts_i[sort_i[ci_cache_idx + first_pi + bit_index].i].id;
+            ++pj->num_ngb_force;
+          }
+        }
+#endif
+
         /* If there are any interactions perform them. */
         if (vec_is_mask_true(v_doj_mask)) {
           vector v_hi_inv = vec_reciprocal(v_hi);
@@ -1827,6 +1926,10 @@ void runner_dopair2_force_vec(struct runner *r, struct cell *ci,
 
     TIMER_TOC(timer_dopair_density);
   }
+
+#else
+
+  error("Incorrectly calling vectorized Gadget-2 functions!");
 
 #endif /* WITH_VECTORIZATION */
 }
