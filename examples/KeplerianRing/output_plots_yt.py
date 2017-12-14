@@ -40,6 +40,13 @@ from tqdm import tqdm
 from make_movie import get_metadata
 
 
+yt.funcs.mylog.setLevel(50)
+
+
+class InternalUnitSystemError(Exception):
+    pass
+
+
 def get_axes_grid(figure):
     """
     Grab our axes grid.
@@ -150,20 +157,21 @@ def get_derived_data(minsnap, maxsnap, filename="out"):
     return initial[0], densities, chisq
 
 
-def plot_chisq(ax, minsnap, maxsnap, chisq):
+def plot_chisq(ax, minsnap, maxsnap, chisq, filename="out"):
     """
     Plot the chisq(snapshot).
     """
     snapshots = np.arange(minsnap, maxsnap + 1)
-    ax.plot(snapshots, np.array(chisq)/max(chisq))
+    rotations = [convert_snapshot_number_to_rotations_at(1, snap, filename) for snap in snapshots]
+    ax.plot(rotations, np.array(chisq)/max(chisq))
 
-    ax.set_xlabel("Snapshot Number")
+    ax.set_xlabel("Number of rotations")
     ax.set_ylabel("$\chi^2 / \chi^2_{{max}}$ = {:3.5f}".format(max(chisq)))
 
     return
 
 
-def plot_density_r(ax, bins, densities, snaplist):
+def plot_density_r(ax, bins, densities, snaplist, filename="out"):
     """
     Make the density(r) plots.
 
@@ -174,13 +182,48 @@ def plot_density_r(ax, bins, densities, snaplist):
 
     for snap in snaplist:
         index = snap - snaplist[0]
-        ax.plot(radii, densities[index], label="Snapshot {:04d}".format(snap))
+        rotations = convert_snapshot_number_to_rotations_at(1, snap, filename)
+        ax.plot(radii, densities[index], label="{:2.2f} Rotations".format(rotations))
 
     ax.legend()
     ax.set_xlabel("Radius")
-    ax.set_ylabel("Density")
+    ax.set_ylabel("Azimuthally Averaged Surface Density")
 
     return
+
+
+def rotation_velocity_at_r(r, metadata):
+    """
+    Gets the rotation velocity at a given radius r by assuming it is keplerian.
+
+    Assumes we are in cgs units, which may one day be our downfall.
+    """
+
+    unit_length = float(metadata["params"]["InternalUnitSystem:UnitCurrent_in_cgs"])
+
+    if unit_length != 1.:
+        print(f"Your unit length: {unit_length}")
+        raise InternalUnitSystemError(
+            "This function is only created to handle CGS units."
+        )
+
+    central_mass = float(metadata["params"]["PointMassPotential:mass"])
+    G = 6.674e-8
+
+    v = np.sqrt( G * central_mass / r)
+
+    return v
+
+
+def get_rotation_period_at_r(r, metadata):
+    """
+    Gets the rotation period at a given radius r, assuming a keplerian
+    orbit.
+    """
+    v = rotation_velocity_at_r(r, metadata)
+
+    return 2*np.pi / v
+
 
 def plot_extra_info(ax, filename):
     """
@@ -203,7 +246,7 @@ def plot_extra_info(ax, filename):
 
     ax.text(-0.49, 0.9, "Keplerian Ring with  $\\gamma={:4.4f}$ in 2/3D".format(gas_gamma), fontsize=11)
     ax.text(-0.49, 0.8, f"Compiler: {compiler_name} {compiler_version}", fontsize=10)
-    #ax.text(-0.49, 0.7, "", fontsize=10)
+    ax.text(-0.49, 0.7, "Rotations are quoted at $r=1$", fontsize=10)
     ax.plot([-0.49, 0.1], [0.62, 0.62], 'k-', lw=1)
     ax.text(-0.49, 0.5, f"$\\textsc{{Swift}}$ {git}", fontsize=10)
     ax.text(-0.49, 0.4, scheme, fontsize=10)
@@ -233,7 +276,7 @@ def surface_density_plot(ax, snapnum, filename="out", density_limits=None, vlim=
     }
 
     filename = "{}_{:04d}.hdf5".format(filename, snapnum)
-    snap = yt.load(filename, unit_base=unit_base)
+    snap = yt.load(filename, unit_base=unit_base, over_refine_factor=2)
 
     projection_plot = yt.ProjectionPlot(
         snap,
@@ -268,12 +311,15 @@ def surface_density_plot(ax, snapnum, filename="out", density_limits=None, vlim=
         vmax=vlim[1]
     )
 
+    metadata = get_metadata(filename)
+    period = get_rotation_period_at_r(1, metadata)
+
     ax.text(
         20,
         80,
-        "Snapshot = {:04d}\nt = {:1.2f}".format(
+        "Snapshot = {:04d}\nRotations = {:1.2f}".format(
             snapnum,
-            float(snap.current_time)
+            float(snap.current_time)/period
         ),
         color='white'
     )
@@ -295,6 +341,19 @@ def surface_density_plot(ax, snapnum, filename="out", density_limits=None, vlim=
     return density_limits, vlim
 
 
+def convert_snapshot_number_to_rotations_at(r, snapnum, filename):
+    """
+    Opens the file and extracts metadata to find the number of rotations.
+    """
+
+    metadata = get_metadata("{}_{:04d}.hdf5".format(filename, snapnum))
+
+    t = get_rotation_period_at_r(r, metadata)
+    current_time = float(metadata["header"]["Time"])
+
+    return current_time / t
+
+
 if __name__ == "__main__":
     import sys
 
@@ -308,7 +367,7 @@ if __name__ == "__main__":
     density_limits = None
     vlim = None
 
-    for snap, ax in zip(snapshots, axes[0:3]):
+    for snap, ax in zip(snapshots, tqdm(axes[0:3], desc="Images")):
         density_limits = surface_density_plot(
             ax,
             snap,
