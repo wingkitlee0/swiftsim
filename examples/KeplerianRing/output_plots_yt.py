@@ -27,6 +27,7 @@
 
 import matplotlib
 matplotlib.use("Agg")
+matplotlib.rc("text", usetex=True)
 
 import yt
 import h5py
@@ -57,15 +58,15 @@ def get_axes_grid(figure):
     return grid
 
 
-def get_yt_actual_data(plot):
+def get_yt_actual_data(plot, name="density"):
     """
     Extracts the image data and colourmap from a yt plot.
     
     This is used to put on our own grid.
     """
 
-    data = plot.plots["density"].image.get_array()
-    cmap = plot.plots["density"].image.cmap
+    data = plot.plots[name].image.get_array()
+    cmap = plot.plots[name].image.cmap
 
     return data, cmap
 
@@ -189,44 +190,40 @@ def plot_extra_info(ax, filename):
     """
 
     metadata = get_metadata(filename)
-
-    text = """
-    Extra Information
-
-    Box Size: {}
-
-    Code
     
-    Git Branch: {}
-    Git Revision: {}
-    Compiler: {} {}
-
-    Hydro
-
-    Scheme: {}
-    Kernel $\eta$: {:4.4f}
-    """.format(
-        metadata['header']['BoxSize'][0]-1,
-        metadata['code']['Git Branch'].decode("utf-8"),
-        metadata['code']['Git Revision'].decode("utf-8"),
-        metadata['code']['Compiler Name'].decode("utf-8"),
-        metadata['code']['Compiler Version'].decode("utf-8"),
-        metadata['hydro']['Scheme'].decode("utf-8"),
-        metadata['hydro']['Kernel eta'][0],
-    )
+    git = metadata['code']['Git Revision'].decode("utf-8")
+    compiler_name = metadata['code']['Compiler Name'].decode("utf-8")
+    compiler_version = metadata['code']['Compiler Version'].decode("utf-8")
+    scheme = metadata['hydro']['Scheme'].decode("utf-8")
+    kernel = metadata['hydro']['Kernel function'].decode("utf-8")
+    gas_gamma = metadata["hydro"]["Adiabatic index"][0]
+    neighbors = metadata["hydro"]["Kernel target N_ngb"][0]
+    eta = metadata["hydro"]["Kernel eta"][0]
     
-    ax.text(0.0, 0.1, text)
+
+    ax.text(-0.49, 0.9, "Keplerian Ring with  $\\gamma={:4.4f}$ in 2/3D".format(gas_gamma), fontsize=11)
+    ax.text(-0.49, 0.8, f"Compiler: {compiler_name} {compiler_version}", fontsize=10)
+    #ax.text(-0.49, 0.7, "", fontsize=10)
+    ax.plot([-0.49, 0.1], [0.62, 0.62], 'k-', lw=1)
+    ax.text(-0.49, 0.5, f"$\\textsc{{Swift}}$ {git}", fontsize=10)
+    ax.text(-0.49, 0.4, scheme, fontsize=10)
+    ax.text(-0.49, 0.3, kernel, fontsize=10)
+    ax.text(-0.49, 0.2, "${:2.2f}$ neighbours ($\\eta={:3.3f}$)".format(neighbors, eta), fontsize=10)
+
     ax.set_axis_off()
+    ax.set_xlim(-0.5, 0.5)
+    ax.set_ylim(0, 1)
 
     return
 
 
-def surface_density_plot(ax, snapnum, filename="out", density_limits=None):
+def surface_density_plot(ax, snapnum, filename="out", density_limits=None, vlim=None):
     """
     Make the surface density plot (via yt).
 
     Also returns the max and minimum values for the density so these can
-    be passed to the next call.
+    be passed to the next call, as well as vlim which are the colourmap
+    max/min.
     """
 
     unit_base = {
@@ -235,31 +232,51 @@ def surface_density_plot(ax, snapnum, filename="out", density_limits=None):
         'mass': (1.0, 'g')
     }
 
-    density_units = yt.units.gram / (yt.units.cm**3)
-    
-    snap = yt.load("{}_{:04d}.hdf5".format(filename, snapnum), unit_base=unit_base)
+    filename = "{}_{:04d}.hdf5".format(filename, snapnum)
+    snap = yt.load(filename, unit_base=unit_base)
 
-    max_density = snap.all_data()[("gas", "density")].max()
-    min_density = snap.all_data()[("gas", "density")].min() + 1 * density_units
+    projection_plot = yt.ProjectionPlot(
+        snap,
+        "z",
+        ("gas", "cell_mass"),
+        width=5.5
+    )
+
+    max_density = snap.all_data()[("gas", "cell_mass")].max()
+    min_density = snap.all_data()[("gas", "cell_mass")].min()
     
     new_density_limits = (min_density, max_density)
 
     if density_limits is None:
         density_limits = new_density_limits
 
-    projection_plot = yt.ProjectionPlot(
-        snap,
-        "z",
-        ("gas", "density"),
-        width=6.
+    projection_plot.set_zlim("cell_mass", *density_limits)
+
+    data = get_yt_actual_data(projection_plot, ("gas", "cell_mass"))
+
+    # Becuase of the way plotting works, we also need a max/min for the colourmap.
+
+    new_vlim = (data[0].min(), data[0].max())
+
+    if vlim is None:
+        vlim = new_vlim
+
+    ax.imshow(
+        data[0],
+        cmap=data[1],
+        vmin=vlim[0],
+        vmax=vlim[1]
     )
 
-    projection_plot.set_zlim("density", *density_limits)
-
-    data = get_yt_actual_data(projection_plot)
-
-    ax.imshow(data[0], cmap=data[1])
-    ax.text(20, 50, "t = {:1.4f}".format(float(snap.current_time)), color='white')
+    ax.text(
+        20,
+        80,
+        "Snapshot = {:04d}\nt = {:1.2f}".format(
+            snapnum,
+            float(snap.current_time)
+        ),
+        color='white'
+    )
 
     # We now want to remove all of the ticklabels.
 
@@ -275,7 +292,7 @@ def surface_density_plot(ax, snapnum, filename="out", density_limits=None):
             labelbottom='off'
         ) 
 
-    return density_limits
+    return density_limits, vlim
 
 
 if __name__ == "__main__":
@@ -289,12 +306,14 @@ if __name__ == "__main__":
     figure.subplots_adjust(hspace=0, wspace=0)
 
     density_limits = None
+    vlim = None
 
     for snap, ax in zip(snapshots, axes[0:3]):
         density_limits = surface_density_plot(
             ax,
             snap,
-            density_limits=density_limits
+            density_limits=density_limits,
+            vlim=vlim
         )
 
     # Now we need to do the density(r) plot.
@@ -308,6 +327,6 @@ if __name__ == "__main__":
 
     plot_extra_info(axes[5], "out_0000.hdf5")
 
-    plt.savefig("test.png")
+    figure.savefig("test.png", dpi=300)
 
 
