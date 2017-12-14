@@ -55,6 +55,7 @@ def get_metadata(filename):
         header = file_handle['Header']
         code = file_handle['Code']
         hydro = file_handle['HydroScheme']
+        params = file_handle['Parameters']
 
         # we want to get the inner velocity of the ring.
         vel = file_handle['PartType0']['Velocities'][0]
@@ -65,7 +66,8 @@ def get_metadata(filename):
             "header" : dict(header.attrs),
             "code" : dict(code.attrs),
             "period" : float(period),
-            "hydro" : dict(hydro.attrs)
+            "hydro" : dict(hydro.attrs),
+            "params" : dict(params.attrs)
         }
 
     return return_values
