@@ -55,7 +55,9 @@ tests/brute_force_125_standard.dat
 tests/swift_dopair_125_standard.dat
 tests/brute_force_125_perturbed.dat
 tests/swift_dopair_125_perturbed.dat
-tests/brute_force_active.dat
+tests/brute_force_pair_active.dat
+tests/brute_force_dopair2_active.dat 
+tests/swift_dopair2_force_active.dat
 tests/brute_force_periodic_BC_perturbed.dat
 tests/swift_dopair_active.dat
 tests/test_nonsym_density_serial.dat
@@ -100,6 +102,7 @@ tests/testVoronoi3D
 tests/testDump
 tests/testLogger
 tests/benchmarkInteractions
+tests/testGravityDerivatives
 
 theory/latex/swift.pdf
 theory/SPH/Kernels/kernels.pdf
@@ -131,6 +134,9 @@ m4/lt~obsolete.m4
 /missing
 /stamp-h1
 /test-driver
+
+# Intel compiler optimization reports
+*.optrpt
 
 # Object files
 .deps/

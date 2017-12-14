@@ -152,7 +152,7 @@ if test "$enable_mpi" = "yes"; then
 fi
 AM_CONDITIONAL([HAVEMPI],[test $enable_mpi = "yes"])
 
-# Indicate that MPIRUN can be modified by an environement variable
+# Indicate that MPIRUN can be modified by an environment variable
 AC_ARG_VAR(MPIRUN, Path to the mpirun command if non-standard)
 
 # Add libtool support (now that CC is defined).
@@ -224,6 +224,18 @@ AC_ARG_ENABLE([debugging-checks],
 )
 if test "$enable_debugging_checks" = "yes"; then
    AC_DEFINE([SWIFT_DEBUG_CHECKS],1,[Enable expensive debugging])
+fi
+
+# Check whether we want to default to naive cell interactions
+AC_ARG_ENABLE([naive-interactions],
+   [AS_HELP_STRING([--enable-naive-interactions],
+     [Activate use of naive cell interaction functions @<:@yes/no@:>@]
+   )],
+   [enable_naive_interactions="$enableval"],
+   [enable_naive_interactions="no"]
+)
+if test "$enable_naive_interactions" = "yes"; then
+   AC_DEFINE([SWIFT_USE_NAIVE_INTERACTIONS],1,[Enable use of naive cell interaction functions])
 fi
 
 # Check if gravity force checks are on for some particles.
@@ -368,7 +380,7 @@ AX_PTHREAD([LIBS="$PTHREAD_LIBS $LIBS" CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
     non-standard location.]))
 
 
-# Check for metis. Note AX_LIB_METIS exists, but cannot be configured
+# Check for METIS. Note AX_LIB_METIS exists, but cannot be configured
 # to be default off (i.e. given no option it tries to locate METIS), so we
 # don't use that.
 have_metis="no"
@@ -925,6 +937,7 @@ AC_MSG_RESULT([
    Task debugging       : $enable_task_debugging
    Threadpool debugging : $enable_threadpool_debugging
    Debugging checks     : $enable_debugging_checks
+   Naive interactions   : $enable_naive_interactions
    Gravity checks       : $gravity_force_checks
 
  ------------------------])

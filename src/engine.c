@@ -99,6 +99,16 @@ const char *engine_policy_names[] = {"none",
 int engine_rank;
 
 /**
+ * @brief Data collected from the cells at the end of a time-step
+ */
+struct end_of_step_data {
+
+  int updates, g_updates, s_updates;
+  integertime_t ti_end_min, ti_end_max, ti_beg_max;
+  struct engine *e;
+};
+
+/**
  * @brief Link a density/force task to a cell.
  *
  * @param e The #engine.
@@ -2971,7 +2981,7 @@ int engine_estimate_nr_tasks(struct engine *e) {
 #endif
   }
   if (e->policy & engine_policy_self_gravity) {
-    n1 += 24;
+    n1 += 32;
     n2 += 1;
 #ifdef WITH_MPI
     n2 += 2;
@@ -3070,12 +3080,8 @@ void engine_rebuild(struct engine *e, int clean_h_values) {
   /* Re-build the tasks. */
   engine_maketasks(e);
 
-  /* Run through the tasks and mark as skip or not. */
-  if (engine_marktasks(e))
-    error("engine_marktasks failed after space_rebuild.");
-
-/* Print the status of the system */
-// if (e->verbose) engine_print_task_counts(e);
+  /* Make the list of top-level cells that have tasks */
+  space_list_cells_with_tasks(e->s);
 
 #ifdef SWIFT_DEBUG_CHECKS
   /* Check that all cells have been drifted to the current time.
@@ -3084,6 +3090,13 @@ void engine_rebuild(struct engine *e, int clean_h_values) {
   space_check_drift_point(e->s, e->ti_old,
                           e->policy & engine_policy_self_gravity);
 #endif
+
+  /* Run through the tasks and mark as skip or not. */
+  if (engine_marktasks(e))
+    error("engine_marktasks failed after space_rebuild.");
+
+  /* Print the status of the system */
+  // if (e->verbose) engine_print_task_counts(e);
 
   if (e->verbose)
     message("took %.3f %s.", clocks_from_ticks(getticks() - tic),
@@ -3151,7 +3164,7 @@ void engine_barrier(struct engine *e) {
  *
  * @param c A super-cell.
  */
-void engine_collect_kick(struct cell *c) {
+void engine_collect_end_of_step_recurse(struct cell *c) {
 
 /* Skip super-cells (Their values are already set) */
 #ifdef WITH_MPI
@@ -3170,7 +3183,7 @@ void engine_collect_kick(struct cell *c) {
     if (cp != NULL && (cp->count > 0 || cp->gcount > 0 || cp->scount > 0)) {
 
       /* Recurse */
-      engine_collect_kick(cp);
+      engine_collect_end_of_step_recurse(cp);
 
       /* And update */
       ti_end_min = min(ti_end_min, cp->ti_end_min);
@@ -3196,6 +3209,54 @@ void engine_collect_kick(struct cell *c) {
   c->s_updated = s_updated;
 }
 
+void engine_collect_end_of_step_mapper(void *map_data, int num_elements,
+                                       void *extra_data) {
+
+  struct end_of_step_data *data = (struct end_of_step_data *)extra_data;
+  struct engine *e = data->e;
+  struct space *s = e->s;
+  int *local_cells = (int *)map_data;
+
+  /* Local collectible */
+  int updates = 0, g_updates = 0, s_updates = 0;
+  integertime_t ti_end_min = max_nr_timesteps, ti_end_max = 0, ti_beg_max = 0;
+
+  for (int ind = 0; ind < num_elements; ind++) {
+    struct cell *c = &s->cells_top[local_cells[ind]];
+
+    if (c->count > 0 || c->gcount > 0 || c->scount > 0) {
+
+      /* Make the top-cells recurse */
+      engine_collect_end_of_step_recurse(c);
+
+      /* And aggregate */
+      ti_end_min = min(ti_end_min, c->ti_end_min);
+      ti_end_max = max(ti_end_max, c->ti_end_max);
+      ti_beg_max = max(ti_beg_max, c->ti_beg_max);
+      updates += c->updated;
+      g_updates += c->g_updated;
+      s_updates += c->s_updated;
+
+      /* Collected, so clear for next time. */
+      c->updated = 0;
+      c->g_updated = 0;
+      c->s_updated = 0;
+    }
+  }
+
+  /* Let's write back to the global data.
+   * We use the space lock to garanty single access*/
+  if (lock_lock(&s->lock) == 0) {
+    data->updates += updates;
+    data->g_updates += g_updates;
+    data->s_updates += s_updates;
+    data->ti_end_min = min(ti_end_min, data->ti_end_min);
+    data->ti_end_max = max(ti_end_max, data->ti_end_max);
+    data->ti_beg_max = max(ti_beg_max, data->ti_beg_max);
+  }
+  if (lock_unlock(&s->lock) != 0) error("Failed to unlock the space");
+}
+
 /**
  * @brief Collects the next time-step and rebuild flag.
  *
@@ -3213,39 +3274,23 @@ void engine_collect_kick(struct cell *c) {
  * @param apply whether to apply the results to the engine or just keep in the
  *              group1 struct.
  */
-void engine_collect_timestep_and_rebuild(struct engine *e, int apply) {
+void engine_collect_end_of_step(struct engine *e, int apply) {
 
   const ticks tic = getticks();
-  int updates = 0, g_updates = 0, s_updates = 0;
-  integertime_t ti_end_min = max_nr_timesteps, ti_end_max = 0, ti_beg_max = 0;
   const struct space *s = e->s;
+  struct end_of_step_data data;
+  data.updates = 0, data.g_updates = 0, data.s_updates = 0;
+  data.ti_end_min = max_nr_timesteps, data.ti_end_max = 0, data.ti_beg_max = 0;
+  data.e = e;
 
-  /* Collect the cell data. */
-  for (int k = 0; k < s->nr_cells; k++) {
-    struct cell *c = &s->cells_top[k];
-    if (c->count > 0 || c->gcount > 0 || c->scount > 0) {
-
-      /* Make the top-cells recurse */
-      engine_collect_kick(c);
-
-      /* And aggregate */
-      ti_end_min = min(ti_end_min, c->ti_end_min);
-      ti_end_max = max(ti_end_max, c->ti_end_max);
-      ti_beg_max = max(ti_beg_max, c->ti_beg_max);
-      updates += c->updated;
-      g_updates += c->g_updated;
-      s_updates += c->s_updated;
-
-      /* Collected, so clear for next time. */
-      c->updated = 0;
-      c->g_updated = 0;
-      c->s_updated = 0;
-    }
-  }
+  /* Collect information from the local top-level cells */
+  threadpool_map(&e->threadpool, engine_collect_end_of_step_mapper,
+                 s->local_cells_top, s->nr_local_cells, sizeof(int), 0, &data);
 
   /* Store these in the temporary collection group. */
-  collectgroup1_init(&e->collect_group1, updates, g_updates, s_updates,
-                     ti_end_min, ti_end_max, ti_beg_max, e->forcerebuild);
+  collectgroup1_init(&e->collect_group1, data.updates, data.g_updates,
+                     data.s_updates, data.ti_end_min, data.ti_end_max,
+                     data.ti_beg_max, e->forcerebuild);
 
 /* Aggregate collective data from the different nodes for this step. */
 #ifdef WITH_MPI
@@ -3256,7 +3301,7 @@ void engine_collect_timestep_and_rebuild(struct engine *e, int apply) {
     /* Check the above using the original MPI calls. */
     integertime_t in_i[1], out_i[1];
     in_i[0] = 0;
-    out_i[0] = ti_end_min;
+    out_i[0] = data.ti_end_min;
     if (MPI_Allreduce(out_i, in_i, 1, MPI_LONG_LONG_INT, MPI_MIN,
                       MPI_COMM_WORLD) != MPI_SUCCESS)
       error("Failed to aggregate ti_end_min.");
@@ -3265,9 +3310,9 @@ void engine_collect_timestep_and_rebuild(struct engine *e, int apply) {
             e->collect_group1.ti_end_min);
 
     long long in_ll[3], out_ll[3];
-    out_ll[0] = updates;
-    out_ll[1] = g_updates;
-    out_ll[2] = s_updates;
+    out_ll[0] = data.updates;
+    out_ll[1] = data.g_updates;
+    out_ll[2] = data.s_updates;
     if (MPI_Allreduce(out_ll, in_ll, 3, MPI_LONG_LONG_INT, MPI_SUM,
                       MPI_COMM_WORLD) != MPI_SUCCESS)
       error("Failed to aggregate particle counts.");
@@ -3556,7 +3601,7 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
 #endif
 
   /* Recover the (integer) end of the next time-step */
-  engine_collect_timestep_and_rebuild(e, 1);
+  engine_collect_end_of_step(e, 1);
 
   /* Check if any particles have the same position. This is not
    * allowed (/0) so we abort.*/
@@ -3692,8 +3737,8 @@ void engine_step(struct engine *e) {
 
     if (e->policy & engine_policy_reconstruct_mpoles)
       engine_reconstruct_multipoles(e);
-    // else
-    //  engine_drift_top_multipoles(e);
+    else
+      engine_drift_top_multipoles(e);
   }
 
   /* Print the number of active tasks ? */
@@ -3739,7 +3784,7 @@ void engine_step(struct engine *e) {
    * end of the next time-step. Do these together to reduce the collective MPI
    * calls per step, but some of the gathered information is not applied just
    * yet (in case we save a snapshot or drift). */
-  engine_collect_timestep_and_rebuild(e, 0);
+  engine_collect_end_of_step(e, 0);
   e->forcerebuild = e->collect_group1.forcerebuild;
 
   /* Save some statistics ? */
@@ -3807,8 +3852,8 @@ void engine_unskip(struct engine *e) {
   const ticks tic = getticks();
 
   /* Activate all the regular tasks */
-  threadpool_map(&e->threadpool, runner_do_unskip_mapper, e->s->cells_top,
-                 e->s->nr_cells, sizeof(struct cell), 1, e);
+  threadpool_map(&e->threadpool, runner_do_unskip_mapper, e->s->local_cells_top,
+                 e->s->nr_local_cells, sizeof(int), 1, e);
 
   /* And the top level gravity FFT one */
   if (e->s->periodic && (e->policy & engine_policy_self_gravity))
@@ -3901,7 +3946,7 @@ void engine_do_drift_top_multipoles_mapper(void *map_data, int num_elements,
     if (c != NULL && c->nodeID == e->nodeID) {
 
       /* Drift the multipole at this level only */
-      cell_drift_multipole(c, e);
+      if (c->ti_old_multipole != e->ti_current) cell_drift_multipole(c, e);
     }
   }
 }

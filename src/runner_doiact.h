@@ -32,6 +32,9 @@
 #define _DOPAIR1(f) PASTE(runner_dopair1, f)
 #define DOPAIR1 _DOPAIR1(FUNCTION)
 
+#define _DOPAIR2_BRANCH(f) PASTE(runner_dopair2_branch, f)
+#define DOPAIR2_BRANCH _DOPAIR2_BRANCH(FUNCTION)
+
 #define _DOPAIR2(f) PASTE(runner_dopair2, f)
 #define DOPAIR2 _DOPAIR2(FUNCTION)
 
@@ -49,6 +52,9 @@
 
 #define _DOPAIR2_NAIVE(f) PASTE(runner_dopair2_naive, f)
 #define DOPAIR2_NAIVE _DOPAIR2_NAIVE(FUNCTION)
+
+#define _DOSELF1_NAIVE(f) PASTE(runner_doself1_naive, f)
+#define DOSELF1_NAIVE _DOSELF1_NAIVE(FUNCTION)
 
 #define _DOSELF2_NAIVE(f) PASTE(runner_doself2_naive, f)
 #define DOSELF2_NAIVE _DOSELF2_NAIVE(FUNCTION)
@@ -121,10 +127,6 @@ void DOPAIR1_NAIVE(struct runner *r, struct cell *restrict ci,
 
   const struct engine *e = r->e;
 
-#ifndef SWIFT_DEBUG_CHECKS
-  error("Don't use in actual runs ! Slow code !");
-#endif
-
   TIMER_TIC;
 
   /* Anything to do here? */
@@ -170,6 +172,14 @@ void DOPAIR1_NAIVE(struct runner *r, struct cell *restrict ci,
                             pj->x[2] - cj->loc[2]};
       float dx[3] = {pix[0] - pjx[0], pix[1] - pjx[1], pix[2] - pjx[2]};
       const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
+
+#ifdef SWIFT_DEBUG_CHECKS
+      /* Check that particles have been drifted to the current time */
+      if (pi->ti_drift != e->ti_current)
+        error("Particle pi not drifted to current time");
+      if (pj->ti_drift != e->ti_current)
+        error("Particle pj not drifted to current time");
+#endif
 
       /* Hit or miss? */
       if (r2 < hig2 && pi_active) {
@@ -205,10 +215,6 @@ void DOPAIR2_NAIVE(struct runner *r, struct cell *restrict ci,
 
   const struct engine *e = r->e;
 
-#ifndef SWIFT_DEBUG_CHECKS
-  error("Don't use in actual runs ! Slow code !");
-#endif
-
   TIMER_TIC;
 
   /* Anything to do here? */
@@ -255,6 +261,14 @@ void DOPAIR2_NAIVE(struct runner *r, struct cell *restrict ci,
       float dx[3] = {pix[0] - pjx[0], pix[1] - pjx[1], pix[2] - pjx[2]};
       const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
+#ifdef SWIFT_DEBUG_CHECKS
+      /* Check that particles have been drifted to the current time */
+      if (pi->ti_drift != e->ti_current)
+        error("Particle pi not drifted to current time");
+      if (pj->ti_drift != e->ti_current)
+        error("Particle pj not drifted to current time");
+#endif
+
       /* Hit or miss? */
       if (r2 < hig2 || r2 < hjg2) {
 
@@ -280,20 +294,16 @@ void DOPAIR2_NAIVE(struct runner *r, struct cell *restrict ci,
 }
 
 /**
- * @brief Compute the interactions within a cell (symmetric case).
+ * @brief Compute the interactions within a cell (non-symmetric case).
  *
  * Inefficient version using a brute-force algorithm.
  *
  * @param r The #runner.
  * @param c The #cell.
  */
-void DOSELF2_NAIVE(struct runner *r, struct cell *restrict c) {
+void DOSELF1_NAIVE(struct runner *r, struct cell *restrict c) {
 
   const struct engine *e = r->e;
-
-#ifndef SWIFT_DEBUG_CHECKS
-  error("Don't use in actual runs ! Slow code !");
-#endif
 
   TIMER_TIC;
 
@@ -308,10 +318,11 @@ void DOSELF2_NAIVE(struct runner *r, struct cell *restrict c) {
 
     /* Get a hold of the ith part in ci. */
     struct part *restrict pi = &parts[pid];
-    const double pix[3] = {pi->x[0], pi->x[1], pi->x[2]};
+    const int pi_active = part_is_active(pi, e);
     const float hi = pi->h;
     const float hig2 = hi * hi * kernel_gamma2;
-    const int pi_active = part_is_active(pi, e);
+    const float pix[3] = {pi->x[0] - c->loc[0], pi->x[1] - c->loc[1],
+                          pi->x[2] - c->loc[2]};
 
     /* Loop over the parts in cj. */
     for (int pjd = pid + 1; pjd < count; pjd++) {
@@ -319,39 +330,121 @@ void DOSELF2_NAIVE(struct runner *r, struct cell *restrict c) {
       /* Get a pointer to the jth particle. */
       struct part *restrict pj = &parts[pjd];
       const float hj = pj->h;
+      const float hjg2 = hj * hj * kernel_gamma2;
       const int pj_active = part_is_active(pj, e);
 
       /* Compute the pairwise distance. */
-      float r2 = 0.0f;
-      float dx[3];
-      for (int k = 0; k < 3; k++) {
-        dx[k] = pix[k] - pj->x[k];
-        r2 += dx[k] * dx[k];
-      }
-      const float hjg2 = hj * hj * kernel_gamma2;
+      const float pjx[3] = {pj->x[0] - c->loc[0], pj->x[1] - c->loc[1],
+                            pj->x[2] - c->loc[2]};
+      float dx[3] = {pix[0] - pjx[0], pix[1] - pjx[1], pix[2] - pjx[2]};
+      const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
+
+      const int doi = pi_active && (r2 < hig2);
+      const int doj = pj_active && (r2 < hjg2);
+
+#ifdef SWIFT_DEBUG_CHECKS
+      /* Check that particles have been drifted to the current time */
+      if (pi->ti_drift != e->ti_current)
+        error("Particle pi not drifted to current time");
+      if (pj->ti_drift != e->ti_current)
+        error("Particle pj not drifted to current time");
+#endif
 
       /* Hit or miss? */
-      if (r2 < hig2 || r2 < hjg2) {
+      if (doi && doj) {
 
-        if (pi_active && pj_active) {
+        IACT(r2, dx, hi, hj, pi, pj);
+      } else if (doi) {
 
-          IACT(r2, dx, hi, hj, pi, pj);
-        } else if (pi_active) {
+        IACT_NONSYM(r2, dx, hi, hj, pi, pj);
+      } else if (doj) {
 
-          IACT_NONSYM(r2, dx, hi, hj, pi, pj);
-        } else if (pj_active) {
+        dx[0] = -dx[0];
+        dx[1] = -dx[1];
+        dx[2] = -dx[2];
 
-          dx[0] = -dx[0];
-          dx[1] = -dx[1];
-          dx[2] = -dx[2];
-
-          IACT_NONSYM(r2, dx, hj, hi, pj, pi);
-        }
+        IACT_NONSYM(r2, dx, hj, hi, pj, pi);
       }
-
     } /* loop over the parts in cj. */
+  }   /* loop over the parts in ci. */
 
-  } /* loop over the parts in ci. */
+  TIMER_TOC(TIMER_DOSELF);
+}
+
+/**
+ * @brief Compute the interactions within a cell (symmetric case).
+ *
+ * Inefficient version using a brute-force algorithm.
+ *
+ * @param r The #runner.
+ * @param c The #cell.
+ */
+void DOSELF2_NAIVE(struct runner *r, struct cell *restrict c) {
+
+  const struct engine *e = r->e;
+
+  TIMER_TIC;
+
+  /* Anything to do here? */
+  if (!cell_is_active(c, e)) return;
+
+  const int count = c->count;
+  struct part *restrict parts = c->parts;
+
+  /* Loop over the parts in ci. */
+  for (int pid = 0; pid < count; pid++) {
+
+    /* Get a hold of the ith part in ci. */
+    struct part *restrict pi = &parts[pid];
+    const int pi_active = part_is_active(pi, e);
+    const float hi = pi->h;
+    const float hig2 = hi * hi * kernel_gamma2;
+    const float pix[3] = {pi->x[0] - c->loc[0], pi->x[1] - c->loc[1],
+                          pi->x[2] - c->loc[2]};
+
+    /* Loop over the parts in cj. */
+    for (int pjd = pid + 1; pjd < count; pjd++) {
+
+      /* Get a pointer to the jth particle. */
+      struct part *restrict pj = &parts[pjd];
+      const float hj = pj->h;
+      const float hjg2 = hj * hj * kernel_gamma2;
+      const int pj_active = part_is_active(pj, e);
+
+      /* Compute the pairwise distance. */
+      const float pjx[3] = {pj->x[0] - c->loc[0], pj->x[1] - c->loc[1],
+                            pj->x[2] - c->loc[2]};
+      float dx[3] = {pix[0] - pjx[0], pix[1] - pjx[1], pix[2] - pjx[2]};
+      const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
+
+      const int doi = pi_active && ((r2 < hig2) || (r2 < hjg2));
+      const int doj = pj_active && ((r2 < hig2) || (r2 < hjg2));
+
+#ifdef SWIFT_DEBUG_CHECKS
+      /* Check that particles have been drifted to the current time */
+      if (pi->ti_drift != e->ti_current)
+        error("Particle pi not drifted to current time");
+      if (pj->ti_drift != e->ti_current)
+        error("Particle pj not drifted to current time");
+#endif
+
+      /* Hit or miss? */
+      if (doi && doj) {
+
+        IACT(r2, dx, hi, hj, pi, pj);
+      } else if (doi) {
+
+        IACT_NONSYM(r2, dx, hi, hj, pi, pj);
+      } else if (doj) {
+
+        dx[0] = -dx[0];
+        dx[1] = -dx[1];
+        dx[2] = -dx[2];
+
+        IACT_NONSYM(r2, dx, hj, hi, pj, pi);
+      }
+    } /* loop over the parts in cj. */
+  }   /* loop over the parts in ci. */
 
   TIMER_TOC(TIMER_DOSELF);
 }
@@ -374,10 +467,6 @@ void DOPAIR_SUBSET_NAIVE(struct runner *r, struct cell *restrict ci,
                          int count, struct cell *restrict cj) {
 
   const struct engine *e = r->e;
-
-#ifndef SWIFT_DEBUG_CHECKS
-  error("Don't use in actual runs ! Slow code !");
-#endif
 
   TIMER_TIC;
 
@@ -459,6 +548,11 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
 
   const struct engine *e = r->e;
 
+#ifdef SWIFT_USE_NAIVE_INTERACTIONS
+  DOPAIR_SUBSET_NAIVE(r, ci, parts_i, ind, count, cj);
+  return;
+#endif
+
   TIMER_TIC;
 
   const int count_j = cj->count;
@@ -523,6 +617,14 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
         float dx[3] = {pix - pjx, piy - pjy, piz - pjz};
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
+#ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles have been drifted to the current time */
+        if (pi->ti_drift != e->ti_current)
+          error("Particle pi not drifted to current time");
+        if (pj->ti_drift != e->ti_current)
+          error("Particle pj not drifted to current time");
+#endif
+
         /* Hit or miss? */
         if (r2 < hig2) {
 
@@ -561,6 +663,14 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
         /* Compute the pairwise distance. */
         float dx[3] = {pix - pjx, piy - pjy, piz - pjz};
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
+
+#ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles have been drifted to the current time */
+        if (pi->ti_drift != e->ti_current)
+          error("Particle pi not drifted to current time");
+        if (pj->ti_drift != e->ti_current)
+          error("Particle pj not drifted to current time");
+#endif
 
         /* Hit or miss? */
         if (r2 < hig2) {
@@ -622,6 +732,14 @@ void DOSELF_SUBSET(struct runner *r, struct cell *restrict ci,
       float dx[3] = {pix[0] - pjx[0], pix[1] - pjx[1], pix[2] - pjx[2]};
       const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
+#ifdef SWIFT_DEBUG_CHECKS
+      /* Check that particles have been drifted to the current time */
+      if (pi->ti_drift != e->ti_current)
+        error("Particle pi not drifted to current time");
+      if (pj->ti_drift != e->ti_current)
+        error("Particle pj not drifted to current time");
+#endif
+
       /* Hit or miss? */
       if (r2 > 0.f && r2 < hig2) {
 
@@ -647,8 +765,10 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
 
   const struct engine *restrict e = r->e;
 
-  // DOPAIR1_NAIVE(r, ci, cj);
-  // return;
+#ifdef SWIFT_USE_NAIVE_INTERACTIONS
+  DOPAIR1_NAIVE(r, ci, cj);
+  return;
+#endif
 
   TIMER_TIC;
 
@@ -661,36 +781,13 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
   const struct entry *restrict sort_j = cj->sort[sid];
 
 #ifdef SWIFT_DEBUG_CHECKS
-  /* Check that the dx_max_sort values in the cell are indeed an upper
-     bound on particle movement. */
-  for (int pid = 0; pid < ci->count; pid++) {
-    const struct part *p = &ci->parts[sort_i[pid].i];
-    const float d = p->x[0] * runner_shift[sid][0] +
-                    p->x[1] * runner_shift[sid][1] +
-                    p->x[2] * runner_shift[sid][2];
-    if (fabsf(d - sort_i[pid].d) - ci->dx_max_sort >
-        1.0e-4 * max(fabsf(d), ci->dx_max_sort_old))
-      error(
-          "particle shift diff exceeds dx_max_sort in cell ci. ci->nodeID=%d "
-          "cj->nodeID=%d d=%e sort_i[pid].d=%e ci->dx_max_sort=%e "
-          "ci->dx_max_sort_old=%e",
-          ci->nodeID, cj->nodeID, d, sort_i[pid].d, ci->dx_max_sort,
-          ci->dx_max_sort_old);
-  }
-  for (int pjd = 0; pjd < cj->count; pjd++) {
-    const struct part *p = &cj->parts[sort_j[pjd].i];
-    const float d = p->x[0] * runner_shift[sid][0] +
-                    p->x[1] * runner_shift[sid][1] +
-                    p->x[2] * runner_shift[sid][2];
-    if (fabsf(d - sort_j[pjd].d) - cj->dx_max_sort >
-        1.0e-4 * max(fabsf(d), cj->dx_max_sort_old))
-      error(
-          "particle shift diff exceeds dx_max_sort in cell cj. cj->nodeID=%d "
-          "ci->nodeID=%d d=%e sort_j[pjd].d=%e cj->dx_max_sort=%e "
-          "cj->dx_max_sort_old=%e",
-          cj->nodeID, ci->nodeID, d, sort_j[pjd].d, cj->dx_max_sort,
-          cj->dx_max_sort_old);
-  }
+  /* Some constants used to checks that the parts are in the right frame */
+  const float shift_threshold_x =
+      2. * ci->width[0] + 2. * max(ci->dx_max_part, cj->dx_max_part);
+  const float shift_threshold_y =
+      2. * ci->width[1] + 2. * max(ci->dx_max_part, cj->dx_max_part);
+  const float shift_threshold_z =
+      2. * ci->width[2] + 2. * max(ci->dx_max_part, cj->dx_max_part);
 #endif /* SWIFT_DEBUG_CHECKS */
 
   /* Get some other useful values. */
@@ -742,6 +839,32 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
 #ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles are in the correct frame after the shifts */
+        if (pix > shift_threshold_x || pix < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pi (pix=%e ci->width[0]=%e)",
+              pix, ci->width[0]);
+        if (piy > shift_threshold_y || piy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pi (piy=%e ci->width[1]=%e)",
+              piy, ci->width[1]);
+        if (piz > shift_threshold_z || piz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pi (piz=%e ci->width[2]=%e)",
+              piz, ci->width[2]);
+        if (pjx > shift_threshold_x || pjx < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pj (pjx=%e ci->width[0]=%e)",
+              pjx, ci->width[0]);
+        if (pjy > shift_threshold_y || pjy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pj (pjy=%e ci->width[1]=%e)",
+              pjy, ci->width[1]);
+        if (pjz > shift_threshold_z || pjz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pj (pjz=%e ci->width[2]=%e)",
+              pjz, ci->width[2]);
+
         /* Check that particles have been drifted to the current time */
         if (pi->ti_drift != e->ti_current)
           error("Particle pi not drifted to current time");
@@ -796,6 +919,32 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
 #ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles are in the correct frame after the shifts */
+        if (pix > shift_threshold_x || pix < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pi (pix=%e ci->width[0]=%e)",
+              pix, ci->width[0]);
+        if (piy > shift_threshold_y || piy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pi (piy=%e ci->width[1]=%e)",
+              piy, ci->width[1]);
+        if (piz > shift_threshold_z || piz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pi (piz=%e ci->width[2]=%e)",
+              piz, ci->width[2]);
+        if (pjx > shift_threshold_x || pjx < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pj (pjx=%e ci->width[0]=%e)",
+              pjx, ci->width[0]);
+        if (pjy > shift_threshold_y || pjy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pj (pjy=%e ci->width[1]=%e)",
+              pjy, ci->width[1]);
+        if (pjz > shift_threshold_z || pjz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pj (pjz=%e ci->width[2]=%e)",
+              pjz, ci->width[2]);
+
         /* Check that particles have been drifted to the current time */
         if (pi->ti_drift != e->ti_current)
           error("Particle pi not drifted to current time");
@@ -847,60 +996,11 @@ void DOPAIR1_BRANCH(struct runner *r, struct cell *ci, struct cell *cj) {
       cj->dx_max_sort_old > space_maxreldx * cj->dmin)
     error("Interacting unsorted cells.");
 
-#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH) && \
-    (DOPAIR1_BRANCH == runner_dopair1_density_branch)
-  if (!sort_is_corner(sid))
-    runner_dopair1_density_vec(r, ci, cj, sid, shift);
-  else
-    DOPAIR1(r, ci, cj, sid, shift);
-#else
-  DOPAIR1(r, ci, cj, sid, shift);
-#endif
-}
-
-/**
- * @brief Compute the interactions between a cell pair (symmetric)
- *
- * @param r The #runner.
- * @param ci The first #cell.
- * @param cj The second #cell.
- */
-void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
-
-  struct engine *restrict e = r->e;
-
-  // DOPAIR2_NAIVE(r, ci, cj);
-  // return;
-
-  TIMER_TIC;
-
-  /* Anything to do here? */
-  if (!cell_is_active(ci, e) && !cell_is_active(cj, e)) return;
-
-  if (!cell_are_part_drifted(ci, e) || !cell_are_part_drifted(cj, e))
-    error("Interacting undrifted cells.");
-
-  /* Get the shift ID. */
-  double shift[3] = {0.0, 0.0, 0.0};
-  const int sid = space_getsid(e->s, &ci, &cj, shift);
-
-  /* Have the cells been sorted? */
-  if (!(ci->sorted & (1 << sid)) ||
-      ci->dx_max_sort_old > space_maxreldx * ci->dmin)
-    error("Interacting unsorted cells.");
-  if (!(cj->sorted & (1 << sid)) ||
-      cj->dx_max_sort_old > space_maxreldx * cj->dmin)
-    error("Interacting unsorted cells.");
-
-  /* Get the cutoff shift. */
-  double rshift = 0.0;
-  for (int k = 0; k < 3; k++) rshift += shift[k] * runner_shift[sid][k];
-
-  /* Pick-out the sorted lists. */
-  struct entry *restrict sort_i = ci->sort[sid];
-  struct entry *restrict sort_j = cj->sort[sid];
-
 #ifdef SWIFT_DEBUG_CHECKS
+  /* Pick-out the sorted lists. */
+  const struct entry *restrict sort_i = ci->sort[sid];
+  const struct entry *restrict sort_j = cj->sort[sid];
+
   /* Check that the dx_max_sort values in the cell are indeed an upper
      bound on particle movement. */
   for (int pid = 0; pid < ci->count; pid++) {
@@ -931,6 +1031,56 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
           cj->nodeID, ci->nodeID, d, sort_j[pjd].d, cj->dx_max_sort,
           cj->dx_max_sort_old);
   }
+#endif /* SWIFT_DEBUG_CHECKS */
+
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH) && \
+    (DOPAIR1_BRANCH == runner_dopair1_density_branch)
+  if (!sort_is_corner(sid))
+    runner_dopair1_density_vec(r, ci, cj, sid, shift);
+  else
+    DOPAIR1(r, ci, cj, sid, shift);
+#else
+  DOPAIR1(r, ci, cj, sid, shift);
+#endif
+}
+
+/**
+ * @brief Compute the interactions between a cell pair (symmetric)
+ *
+ * @param r The #runner.
+ * @param ci The first #cell.
+ * @param cj The second #cell.
+ * @param sid The direction of the pair
+ * @param shift The shift vector to apply to the particles in ci.
+ */
+void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
+             const double *shift) {
+
+  struct engine *restrict e = r->e;
+
+#ifdef SWIFT_USE_NAIVE_INTERACTIONS
+  DOPAIR2_NAIVE(r, ci, cj);
+  return;
+#endif
+
+  TIMER_TIC;
+
+  /* Get the cutoff shift. */
+  double rshift = 0.0;
+  for (int k = 0; k < 3; k++) rshift += shift[k] * runner_shift[sid][k];
+
+  /* Pick-out the sorted lists. */
+  struct entry *restrict sort_i = ci->sort[sid];
+  struct entry *restrict sort_j = cj->sort[sid];
+
+#ifdef SWIFT_DEBUG_CHECKS
+  /* Some constants used to checks that the parts are in the right frame */
+  const float shift_threshold_x =
+      2. * ci->width[0] + 2. * max(ci->dx_max_part, cj->dx_max_part);
+  const float shift_threshold_y =
+      2. * ci->width[1] + 2. * max(ci->dx_max_part, cj->dx_max_part);
+  const float shift_threshold_z =
+      2. * ci->width[2] + 2. * max(ci->dx_max_part, cj->dx_max_part);
 #endif /* SWIFT_DEBUG_CHECKS */
 
   /* Get some other useful values. */
@@ -1035,6 +1185,32 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
 #ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles are in the correct frame after the shifts */
+        if (pix > shift_threshold_x || pix < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pi (pix=%e ci->width[0]=%e)",
+              pix, ci->width[0]);
+        if (piy > shift_threshold_y || piy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pi (piy=%e ci->width[1]=%e)",
+              piy, ci->width[1]);
+        if (piz > shift_threshold_z || piz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pi (piz=%e ci->width[2]=%e)",
+              piz, ci->width[2]);
+        if (pjx > shift_threshold_x || pjx < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pj (pjx=%e ci->width[0]=%e)",
+              pjx, ci->width[0]);
+        if (pjy > shift_threshold_y || pjy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pj (pjy=%e ci->width[1]=%e)",
+              pjy, ci->width[1]);
+        if (pjz > shift_threshold_z || pjz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pj (pjz=%e ci->width[2]=%e)",
+              pjz, ci->width[2]);
+
         /* Check that particles have been drifted to the current time */
         if (pi->ti_drift != e->ti_current)
           error("Particle pi not drifted to current time");
@@ -1069,6 +1245,32 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
 #ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles are in the correct frame after the shifts */
+        if (pix > shift_threshold_x || pix < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pi (pix=%e ci->width[0]=%e)",
+              pix, ci->width[0]);
+        if (piy > shift_threshold_y || piy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pi (piy=%e ci->width[1]=%e)",
+              piy, ci->width[1]);
+        if (piz > shift_threshold_z || piz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pi (piz=%e ci->width[2]=%e)",
+              piz, ci->width[2]);
+        if (pjx > shift_threshold_x || pjx < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pj (pjx=%e ci->width[0]=%e)",
+              pjx, ci->width[0]);
+        if (pjy > shift_threshold_y || pjy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pj (pjy=%e ci->width[1]=%e)",
+              pjy, ci->width[1]);
+        if (pjz > shift_threshold_z || pjz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pj (pjz=%e ci->width[2]=%e)",
+              pjz, ci->width[2]);
+
         /* Check that particles have been drifted to the current time */
         if (pi->ti_drift != e->ti_current)
           error("Particle pi not drifted to current time");
@@ -1133,6 +1335,32 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
 #ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles are in the correct frame after the shifts */
+        if (pix > shift_threshold_x || pix < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pi (pix=%e ci->width[0]=%e)",
+              pix, ci->width[0]);
+        if (piy > shift_threshold_y || piy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pi (piy=%e ci->width[1]=%e)",
+              piy, ci->width[1]);
+        if (piz > shift_threshold_z || piz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pi (piz=%e ci->width[2]=%e)",
+              piz, ci->width[2]);
+        if (pjx > shift_threshold_x || pjx < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pj (pjx=%e ci->width[0]=%e)",
+              pjx, ci->width[0]);
+        if (pjy > shift_threshold_y || pjy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pj (pjy=%e ci->width[1]=%e)",
+              pjy, ci->width[1]);
+        if (pjz > shift_threshold_z || pjz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pj (pjz=%e ci->width[2]=%e)",
+              pjz, ci->width[2]);
+
         /* Check that particles have been drifted to the current time */
         if (pi->ti_drift != e->ti_current)
           error("Particle pi not drifted to current time");
@@ -1169,6 +1397,32 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         const float r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
 
 #ifdef SWIFT_DEBUG_CHECKS
+        /* Check that particles are in the correct frame after the shifts */
+        if (pix > shift_threshold_x || pix < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pi (pix=%e ci->width[0]=%e)",
+              pix, ci->width[0]);
+        if (piy > shift_threshold_y || piy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pi (piy=%e ci->width[1]=%e)",
+              piy, ci->width[1]);
+        if (piz > shift_threshold_z || piz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pi (piz=%e ci->width[2]=%e)",
+              piz, ci->width[2]);
+        if (pjx > shift_threshold_x || pjx < -shift_threshold_x)
+          error(
+              "Invalid particle position in X for pj (pjx=%e ci->width[0]=%e)",
+              pjx, ci->width[0]);
+        if (pjy > shift_threshold_y || pjy < -shift_threshold_y)
+          error(
+              "Invalid particle position in Y for pj (pjy=%e ci->width[1]=%e)",
+              pjy, ci->width[1]);
+        if (pjz > shift_threshold_z || pjz < -shift_threshold_z)
+          error(
+              "Invalid particle position in Z for pj (pjz=%e ci->width[2]=%e)",
+              pjz, ci->width[2]);
+
         /* Check that particles have been drifted to the current time */
         if (pi->ti_drift != e->ti_current)
           error("Particle pi not drifted to current time");
@@ -1198,6 +1452,86 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 }
 
 /**
+ * @brief Determine which version of DOPAIR2 needs to be called depending on the
+ * orientation of the cells or whether DOPAIR2 needs to be called at all.
+ *
+ * @param r #runner
+ * @param ci #cell ci
+ * @param cj #cell cj
+ *
+ */
+void DOPAIR2_BRANCH(struct runner *r, struct cell *ci, struct cell *cj) {
+
+  const struct engine *restrict e = r->e;
+
+  /* Anything to do here? */
+  if (!cell_is_active(ci, e) && !cell_is_active(cj, e)) return;
+
+  /* Check that cells are drifted. */
+  if (!cell_are_part_drifted(ci, e) || !cell_are_part_drifted(cj, e))
+    error("Interacting undrifted cells.");
+
+  /* Get the sort ID. */
+  double shift[3] = {0.0, 0.0, 0.0};
+  const int sid = space_getsid(e->s, &ci, &cj, shift);
+
+  /* Have the cells been sorted? */
+  if (!(ci->sorted & (1 << sid)) ||
+      ci->dx_max_sort_old > space_maxreldx * ci->dmin)
+    error("Interacting unsorted cells.");
+  if (!(cj->sorted & (1 << sid)) ||
+      cj->dx_max_sort_old > space_maxreldx * cj->dmin)
+    error("Interacting unsorted cells.");
+
+#ifdef SWIFT_DEBUG_CHECKS
+  /* Pick-out the sorted lists. */
+  const struct entry *restrict sort_i = ci->sort[sid];
+  const struct entry *restrict sort_j = cj->sort[sid];
+
+  /* Check that the dx_max_sort values in the cell are indeed an upper
+     bound on particle movement. */
+  for (int pid = 0; pid < ci->count; pid++) {
+    const struct part *p = &ci->parts[sort_i[pid].i];
+    const float d = p->x[0] * runner_shift[sid][0] +
+                    p->x[1] * runner_shift[sid][1] +
+                    p->x[2] * runner_shift[sid][2];
+    if (fabsf(d - sort_i[pid].d) - ci->dx_max_sort >
+        1.0e-4 * max(fabsf(d), ci->dx_max_sort_old))
+      error(
+          "particle shift diff exceeds dx_max_sort in cell ci. ci->nodeID=%d "
+          "cj->nodeID=%d d=%e sort_i[pid].d=%e ci->dx_max_sort=%e "
+          "ci->dx_max_sort_old=%e",
+          ci->nodeID, cj->nodeID, d, sort_i[pid].d, ci->dx_max_sort,
+          ci->dx_max_sort_old);
+  }
+  for (int pjd = 0; pjd < cj->count; pjd++) {
+    const struct part *p = &cj->parts[sort_j[pjd].i];
+    const float d = p->x[0] * runner_shift[sid][0] +
+                    p->x[1] * runner_shift[sid][1] +
+                    p->x[2] * runner_shift[sid][2];
+    if (fabsf(d - sort_j[pjd].d) - cj->dx_max_sort >
+        1.0e-4 * max(fabsf(d), cj->dx_max_sort_old))
+      error(
+          "particle shift diff exceeds dx_max_sort in cell cj. cj->nodeID=%d "
+          "ci->nodeID=%d d=%e sort_j[pjd].d=%e cj->dx_max_sort=%e "
+          "cj->dx_max_sort_old=%e",
+          cj->nodeID, ci->nodeID, d, sort_j[pjd].d, cj->dx_max_sort,
+          cj->dx_max_sort_old);
+  }
+#endif /* SWIFT_DEBUG_CHECKS */
+
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH) && \
+    (DOPAIR2_BRANCH == runner_dopair2_force_branch)
+  if (!sort_is_corner(sid))
+    runner_dopair2_force_vec(r, ci, cj, sid, shift);
+  else
+    DOPAIR2(r, ci, cj, sid, shift);
+#else
+  DOPAIR2(r, ci, cj, sid, shift);
+#endif
+}
+
+/**
  * @brief Compute the cell self-interaction (non-symmetric).
  *
  * @param r The #runner.
@@ -1206,6 +1540,11 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 void DOSELF1(struct runner *r, struct cell *restrict c) {
 
   const struct engine *e = r->e;
+
+#ifdef SWIFT_USE_NAIVE_INTERACTIONS
+  DOSELF1_NAIVE(r, c);
+  return;
+#endif
 
   TIMER_TIC;
 
@@ -1338,6 +1677,11 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 void DOSELF2(struct runner *r, struct cell *restrict c) {
 
   const struct engine *e = r->e;
+
+#ifdef SWIFT_USE_NAIVE_INTERACTIONS
+  DOSELF2_NAIVE(r, c);
+  return;
+#endif
 
   TIMER_TIC;
 
@@ -1992,7 +2336,7 @@ void DOSUB_PAIR2(struct runner *r, struct cell *ci, struct cell *cj, int sid,
       error("Interacting unsorted cells.");
 
     /* Compute the interactions. */
-    DOPAIR2(r, ci, cj);
+    DOPAIR2_BRANCH(r, ci, cj);
   }
 
   if (gettimer) TIMER_TOC(TIMER_DOSUB_PAIR);
@@ -2080,8 +2424,11 @@ void DOSUB_SUBSET(struct runner *r, struct cell *ci, struct part *parts,
 
     /* Otherwise, compute self-interaction. */
     else
+#if defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
+      runner_doself_subset_density_vec(r, ci, parts, ind, count);
+#else
       DOSELF_SUBSET(r, ci, parts, ind, count);
-
+#endif
   } /* self-interaction. */
 
   /* Otherwise, it's a pair interaction. */

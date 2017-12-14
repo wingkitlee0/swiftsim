@@ -1038,6 +1038,12 @@ void scheduler_reweight(struct scheduler *s, int verbose) {
       case task_type_timestep:
         cost = wscale * t->ci->count;
         break;
+      case task_type_send:
+        cost = 10 * wscale * t->ci->count * t->ci->count;
+        break;
+      case task_type_recv:
+        cost = 5 * wscale * t->ci->count * t->ci->count;
+        break;
       default:
         cost = 0;
         break;
@@ -1274,10 +1280,10 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
       case task_type_recv:
 #ifdef WITH_MPI
         if (t->subtype == task_subtype_tend) {
-          t->buff = malloc(sizeof(integertime_t) * t->ci->pcell_size);
-          err = MPI_Irecv(t->buff, t->ci->pcell_size * sizeof(integertime_t),
-                          MPI_BYTE, t->ci->nodeID, t->flags, MPI_COMM_WORLD,
-                          &t->req);
+          t->buff = malloc(sizeof(struct pcell_step) * t->ci->pcell_size);
+          err = MPI_Irecv(
+              t->buff, t->ci->pcell_size * sizeof(struct pcell_step), MPI_BYTE,
+              t->ci->nodeID, t->flags, MPI_COMM_WORLD, &t->req);
         } else if (t->subtype == task_subtype_xv ||
                    t->subtype == task_subtype_rho ||
                    t->subtype == task_subtype_gradient) {
@@ -1309,11 +1315,11 @@ void scheduler_enqueue(struct scheduler *s, struct task *t) {
       case task_type_send:
 #ifdef WITH_MPI
         if (t->subtype == task_subtype_tend) {
-          t->buff = malloc(sizeof(integertime_t) * t->ci->pcell_size);
-          cell_pack_ti_ends(t->ci, t->buff);
-          err = MPI_Isend(t->buff, t->ci->pcell_size * sizeof(integertime_t),
-                          MPI_BYTE, t->cj->nodeID, t->flags, MPI_COMM_WORLD,
-                          &t->req);
+          t->buff = malloc(sizeof(struct pcell_step) * t->ci->pcell_size);
+          cell_pack_end_step(t->ci, t->buff);
+          err = MPI_Isend(
+              t->buff, t->ci->pcell_size * sizeof(struct pcell_step), MPI_BYTE,
+              t->cj->nodeID, t->flags, MPI_COMM_WORLD, &t->req);
         } else if (t->subtype == task_subtype_xv ||
                    t->subtype == task_subtype_rho ||
                    t->subtype == task_subtype_gradient) {
@@ -1603,7 +1609,7 @@ void scheduler_print_tasks(const struct scheduler *s, const char *fileName) {
 
   for (int k = nr_tasks - 1; k >= 0; k--) {
     t = &tasks[tid[k]];
-    if (!((1 << t->type)) || t->skip) continue;
+    if (t->skip) continue;
     fprintf(file, "%d %s %s %d %d\n", k, taskID_names[t->type],
             subtaskID_names[t->subtype], t->nr_unlock_tasks, t->wait);
   }
