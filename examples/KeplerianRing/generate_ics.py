@@ -659,7 +659,7 @@ if __name__ == "__main__":
         exit(1)
 
 
-    if ARGS["smoothing"] == "-1":
+    if ARGS["smoothing"] == -1:
         smoothing = float(ARGS["boxsize"]) / int(ARGS["nparts"])
     else:
         smoothing = float(ARGS["smoothing"])
