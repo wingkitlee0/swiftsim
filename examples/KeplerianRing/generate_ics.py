@@ -494,8 +494,6 @@ def gen_particles_spiral(meta):
     particles.phi = phi
 
     particles.convert_polar_to_cartesian(centre_of_ring, meta["boxsize"])
-    phi = np.zeros_like(particles.theta)
-    particles.phi = phi
     particles.nparts = len(particles.radii)
 
     particles.exclude_particles((particles.softening, 100.))
