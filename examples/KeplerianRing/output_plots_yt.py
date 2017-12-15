@@ -130,7 +130,7 @@ def bin_density_r(radii, density, binrange, binnumber):
     return bins, binned_densities
 
 
-def get_density_r(snapshot, filename="out", binrange=(0, 5), binnumber=50):
+def get_density_r(snapshot, filename="keplerian_ring", binrange=(0, 5), binnumber=50):
     """
     Gets the binned density as a function of radius.
     """
@@ -142,7 +142,7 @@ def get_density_r(snapshot, filename="out", binrange=(0, 5), binnumber=50):
     return bin_density_r(*data, binrange, binnumber)
 
 
-def get_derived_data(minsnap, maxsnap, filename="out"):
+def get_derived_data(minsnap, maxsnap, filename="keplerian_ring"):
     """
     Gets the derived data from our snapshots, i.e. the
     density(r) profile and the chi squared (based on the
@@ -157,7 +157,7 @@ def get_derived_data(minsnap, maxsnap, filename="out"):
     return initial[0], densities, chisq
 
 
-def plot_chisq(ax, minsnap, maxsnap, chisq, filename="out"):
+def plot_chisq(ax, minsnap, maxsnap, chisq, filename="keplerian_ring"):
     """
     Plot the chisq(snapshot).
     """
@@ -171,7 +171,7 @@ def plot_chisq(ax, minsnap, maxsnap, chisq, filename="out"):
     return
 
 
-def plot_density_r(ax, bins, densities, snaplist, filename="out"):
+def plot_density_r(ax, bins, densities, snaplist, filename="keplerian_ring"):
     """
     Make the density(r) plots.
 
@@ -190,39 +190,6 @@ def plot_density_r(ax, bins, densities, snaplist, filename="out"):
     ax.set_ylabel("Azimuthally Averaged Surface Density")
 
     return
-
-
-def rotation_velocity_at_r(r, metadata):
-    """
-    Gets the rotation velocity at a given radius r by assuming it is keplerian.
-
-    Assumes we are in cgs units, which may one day be our downfall.
-    """
-
-    unit_length = float(metadata["params"]["InternalUnitSystem:UnitCurrent_in_cgs"])
-
-    if unit_length != 1.:
-        print(f"Your unit length: {unit_length}")
-        raise InternalUnitSystemError(
-            "This function is only created to handle CGS units."
-        )
-
-    central_mass = float(metadata["params"]["PointMassPotential:mass"])
-    G = 6.674e-8
-
-    v = np.sqrt( G * central_mass / r)
-
-    return v
-
-
-def get_rotation_period_at_r(r, metadata):
-    """
-    Gets the rotation period at a given radius r, assuming a keplerian
-    orbit.
-    """
-    v = rotation_velocity_at_r(r, metadata)
-
-    return 2*np.pi / v
 
 
 def plot_extra_info(ax, filename):
@@ -260,7 +227,7 @@ def plot_extra_info(ax, filename):
     return
 
 
-def surface_density_plot(ax, snapnum, filename="out", density_limits=None, vlim=None):
+def surface_density_plot(ax, snapnum, filename="keplerian_ring", density_limits=None, vlim=None):
     """
     Make the surface density plot (via yt).
 
@@ -312,7 +279,7 @@ def surface_density_plot(ax, snapnum, filename="out", density_limits=None, vlim=
     )
 
     metadata = get_metadata(filename)
-    period = get_rotation_period_at_r(1, metadata)
+    period = metadata["period"]
 
     ax.text(
         20,
@@ -348,7 +315,7 @@ def convert_snapshot_number_to_rotations_at(r, snapnum, filename):
 
     metadata = get_metadata("{}_{:04d}.hdf5".format(filename, snapnum))
 
-    t = get_rotation_period_at_r(r, metadata)
+    t = metadata["period"]
     current_time = float(metadata["header"]["Time"])
 
     return current_time / t
@@ -357,7 +324,7 @@ def convert_snapshot_number_to_rotations_at(r, snapnum, filename):
 if __name__ == "__main__":
     import sys
 
-    filename = "out"
+    filename = "keplerian_ring"
     snapshots = [int(x) for x in sys.argv[1:]]
 
     figure = plt.figure(figsize=(12, 10))
@@ -384,7 +351,7 @@ if __name__ == "__main__":
 
     plot_chisq(axes[4], snapshots[0], snapshots[2], derived_data[2])
 
-    plot_extra_info(axes[5], "out_0000.hdf5")
+    plot_extra_info(axes[5], "keplerian_ring_0000.hdf5")
 
     figure.savefig("test.png", dpi=300)
 

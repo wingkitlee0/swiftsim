@@ -49,29 +49,58 @@ def rms(x):
     return np.sqrt(sum(x**2))
 
 
-def get_metadata(filename):
+def rotation_velocity_at_r(r, params):
+    """
+    Gets the rotation velocity at a given radius r by assuming it is keplerian.
+
+    Assumes we are in cgs units, which may one day be our downfall.
+    """
+
+    unit_length = float(params[r"InternalUnitSystem:UnitLength_in_cgs"])
+
+    if unit_length != 1.:
+        print(f"Your unit length: {unit_length}")
+        raise InternalUnitSystemError(
+            "This function is only created to handle CGS units."
+        )
+
+    central_mass = float(params["PointMassPotential:mass"])
+    G = 6.674e-8
+
+    v = np.sqrt( G * central_mass / r)
+
+    return v
+
+
+def get_rotation_period_at_r(r, params):
+    """
+    Gets the rotation period at a given radius r, assuming a keplerian
+    orbit.
+    """
+    v = rotation_velocity_at_r(r, params)
+
+    return 2*np.pi / v
+
+
+def get_metadata(filename, r=1):
     """ The metadata should be extracted from the first snapshot. """
     with h5.File(filename, "r") as file_handle:
-        header = file_handle['Header']
-        code = file_handle['Code']
-        hydro = file_handle['HydroScheme']
-        params = file_handle['Parameters']
+        header = file_handle['Header'].attrs
+        code = file_handle['Code'].attrs
+        hydro = file_handle['HydroScheme'].attrs
+        params = file_handle['Parameters'].attrs
 
-        # we want to get the inner velocity of the ring.
-        vel = file_handle['PartType0']['Velocities'][0]
-        rad = file_handle['PartType0']['Coordinates'][0]
-        period = 2 * np.pi * rms(rad-100) / rms(vel)
+        period = get_rotation_period_at_r(r, params)
 
         return_values = {
-            "header" : dict(header.attrs),
-            "code" : dict(code.attrs),
+            "header" : dict(header),
+            "code" : dict(code),
             "period" : float(period),
-            "hydro" : dict(hydro.attrs),
-            "params" : dict(params.attrs)
+            "hydro" : dict(hydro),
+            "params" : dict(params)
         }
 
     return return_values
-        
 
 
 def plot_single(number, scatter, text, metadata, ax, options=False):
@@ -102,14 +131,15 @@ if __name__ == "__main__":
 
     scatter, = ax.plot([0]*n_particle, [0]*n_particle, ms=0.5, marker="o", linestyle="")
     ax.set_xlim(0, metadata['header']['BoxSize'][0])
-    ax.set_ylim(0, metadata['header']['BoxSize'][0])
+    ax.set_ylim(0, metadata['header']['BoxSize'][1])
 
-    time_text = ax.text(1, 1, "Time: {:1.2f} | Rotations {:1.2f}".format(
+    offset = 0.25
+    time_text = ax.text(offset, offset, "Time: {:1.2f} | Rotations {:1.2f}".format(
         0,
         0/metadata['period'],
     ))
 
-    ax.text(1, metadata['header']['BoxSize'][0]-1, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
+    ax.text(offset, metadata['header']['BoxSize'][0]-offset-0.5, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
         metadata['code']['Git Branch'].decode("utf-8"),
         metadata['code']['Git Revision'].decode("utf-8"),
         metadata['code']['Compiler Name'].decode("utf-8"),
@@ -117,6 +147,7 @@ if __name__ == "__main__":
         metadata['hydro']['Scheme'].decode("utf-8"),
         metadata['hydro']['Kernel eta'][0],
     ))
+
     ax.set_title("Keplerian Ring Test")
     ax.set_xlabel("$x$ position")
     ax.set_ylabel("$y$ position")
