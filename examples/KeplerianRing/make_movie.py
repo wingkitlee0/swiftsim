@@ -27,6 +27,9 @@
 ###############################################################################
 """
 
+import maptlotlib
+matplotlib.use("Agg")
+
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as anim
