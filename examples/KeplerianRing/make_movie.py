@@ -27,7 +27,7 @@
 ###############################################################################
 """
 
-import maptlotlib
+import matplotlib
 matplotlib.use("Agg")
 
 
