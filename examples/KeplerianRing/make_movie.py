@@ -39,13 +39,27 @@ import h5py as h5
 from tqdm import tqdm
 
 
-def load_data(filename, silent=True):
+def get_colours(numbers, norm=None, cm_name="viridis"):
+    if norm is None:
+        norm = matplotlib.colors.Normalize(vmax=numbers.max(), vmin=numbers.min())
+
+    cmap = matplotlib.cm.get_cmap(cm_name)
+
+    return cmap(norm(numbers)), norm
+        
+
+def load_data(filename, silent=True, extra=None):
     if not silent:
         print(f"Loading data from {filename}")
     with h5.File(filename, "r") as file_handle:
         coords = file_handle['PartType0']['Coordinates'][...]
         time = float(file_handle['Header'].attrs['Time'])
-        return coords, time
+
+        if extra is not None:
+            other = file_handle['PartType0'][extra][...]
+            return coords, time, other
+        else:
+            return coords, time
 
 
 def rms(x):
@@ -106,9 +120,14 @@ def get_metadata(filename, r=1):
     return return_values
 
 
-def plot_single(number, scatter, text, metadata, ax, options=False):
+def plot_single(number, scatter, text, metadata, ax, extra=None, norm=None):
     filename = "keplerian_ring_{:04d}.hdf5".format(number)
-    coordinates, time = load_data(filename)
+
+    if extra is not None:
+        coordinates, time, other = load_data(filename, extra=extra)
+    else:
+        coordinates, time = load_data(filename)
+
 
     text.set_text(
         "Time: {:1.2f} | Rotations {:1.2f}".format(
@@ -117,22 +136,55 @@ def plot_single(number, scatter, text, metadata, ax, options=False):
         )
     )
 
-    scatter.set_data(coordinates[:, 0], coordinates[:, 1])
+    data = coordinates[:, 0:2]
+    scatter.set_offsets(data)
+
+    if extra is not None:
+        colours, _ = get_colours(other, norm)
+        scatter.set_color(colours)
 
     return scatter,
 
 
 if __name__ == "__main__":
     import os
+    import sys
+
+    # Look for the number of files in the directory.
+    i = 0
+    while True:
+        if os.path.isfile("keplerian_ring_{:04d}.hdf5".format(i)):
+            i += 1
+        else:
+            break
+
+        if i > 10000:
+            break
+
+
+    if len(sys.argv) > 1:
+        extra = sys.argv[1]
+    else:
+        extra = None
+        norm = None
 
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111)
     metadata = get_metadata("keplerian_ring_0000.hdf5")
+    
+    if extra is not None:
+        _, _, numbers0 = load_data("keplerian_ring_0000.hdf5", extra=extra)
+        _, _, numbersend = load_data("keplerian_ring_{:04d}.hdf5".format(i-1), extra=extra)
+        vmax = max([numbers0.max(), numbersend.max()])
+        vmin = min([numbers0.min(), numbersend.min()])
+
+        norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+
     n_particle = metadata['header']['NumPart_Total'][0]
 
     # Initial plot setup
 
-    scatter, = ax.plot([0]*n_particle, [0]*n_particle, ms=0.5, marker="o", linestyle="")
+    scatter = ax.scatter([0]*n_particle, [0]*n_particle, s=0.5, marker="o")
     ax.set_xlim(0, metadata['header']['BoxSize'][0])
     ax.set_ylim(0, metadata['header']['BoxSize'][1])
 
@@ -155,16 +207,6 @@ if __name__ == "__main__":
     ax.set_xlabel("$x$ position")
     ax.set_ylabel("$y$ position")
 
-    # Look for the number of files in the directory.
-    i = 0
-    while True:
-        if os.path.isfile("keplerian_ring_{:04d}.hdf5".format(i)):
-            i += 1
-        else:
-            break
-
-        if i > 10000:
-            break
 
     
     anim = anim.FuncAnimation(
@@ -176,6 +218,8 @@ if __name__ == "__main__":
             time_text,
             metadata,
             ax,
+            extra,
+            norm
         ],
         interval=50,
         repeat_delay=3000,
