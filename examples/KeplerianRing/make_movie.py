@@ -48,15 +48,42 @@ def get_colours(numbers, norm=None, cm_name="viridis"):
     return cmap(norm(numbers)), norm
         
 
-def load_data(filename, silent=True, extra=None):
+def load_data(filename, silent=True, extra=None, logextra=True, exclude=None):
     if not silent:
         print(f"Loading data from {filename}")
+
     with h5.File(filename, "r") as file_handle:
         coords = file_handle['PartType0']['Coordinates'][...]
         time = float(file_handle['Header'].attrs['Time'])
+        boxsize = file_handle['Header'].attrs['BoxSize']
+
+        # For some old runs we have z=0
+        if np.sum(coords[:, 2]) == 0:
+            centre_of_box = np.array(list(boxsize[:2]/2) + [0])
+        else:
+            centre_of_box = boxsize/2
+
+        
+        if exclude is not None:
+            distance_from_centre = coords - centre_of_box
+            r2 = np.sum(distance_from_centre * distance_from_centre, 1)
+            mask = r2 < (exclude * exclude)
+
+            masked = np.ma.array(coords, mask=np.array([mask]*3))
+
+            coords = masked.compressed()
+        
 
         if extra is not None:
             other = file_handle['PartType0'][extra][...]
+            if exclude is not None:
+                masked = np.ma.array(other, mask=mask)
+
+                other = masked.compressed()
+
+            if logextra:
+                other = np.log(other)
+
             return coords, time, other
         else:
             return coords, time
@@ -148,7 +175,41 @@ def plot_single(number, scatter, text, metadata, ax, extra=None, norm=None):
 
 if __name__ == "__main__":
     import os
-    import sys
+    import argparse as ap
+
+    parser = ap.ArgumentParser(
+        description="""
+                   Plots a movie of the current snapshots in your
+                   directory. Can also colourmap your information.
+                   """
+    )
+
+    parser.add_argument(
+        "-e",
+        "--exclude_central",
+        help="""
+             Region from the centre of the ring to exclude from the
+             vmin/vmax of the colourmap. Note that these particles are
+             still plotted -- they are just excluded for the purposes
+             of colourmapping. Default: 1 simulation unit.
+             """,
+        default=1.,
+        required=False
+    )
+
+    parser.add_argument(
+        "-c",
+        "--cmap",
+        help="""
+             The item from the GADGET hdf5 file to clourmap with.
+             Examples include Density, InternalEnergy.
+             Default: don't use a colourmap. (Much faster).
+             """,
+        required=False,
+        default=None
+    )
+    
+    args = vars(parser.parse_args())
 
     # Look for the number of files in the directory.
     i = 0
@@ -162,27 +223,24 @@ if __name__ == "__main__":
             break
 
 
-    if len(sys.argv) > 1:
-        extra = sys.argv[1]
-    else:
-        extra = None
-        norm = None
-
-    fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(111)
-    metadata = get_metadata("keplerian_ring_0000.hdf5")
-    
-    if extra is not None:
-        _, _, numbers0 = load_data("keplerian_ring_0000.hdf5", extra=extra)
-        _, _, numbersend = load_data("keplerian_ring_{:04d}.hdf5".format(i-1), extra=extra)
+   
+    # Now deal with the colourmapping (if present)
+    if args["cmap"] is not None:
+        _, _, numbers0 = load_data("keplerian_ring_0000.hdf5", extra=args["cmap"], exclude=float(args["exclude_central"]))
+        _, _, numbersend = load_data("keplerian_ring_{:04d}.hdf5".format(i-1), extra=args["cmap"], exclude=float(args["exclude_central"]))
         vmax = max([numbers0.max(), numbersend.max()])
         vmin = min([numbers0.min(), numbersend.min()])
 
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
 
-    n_particle = metadata['header']['NumPart_Total'][0]
 
     # Initial plot setup
+
+    metadata = get_metadata("keplerian_ring_0000.hdf5")
+    n_particle = metadata['header']['NumPart_Total'][0]
+
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111)
 
     scatter = ax.scatter([0]*n_particle, [0]*n_particle, s=0.5, marker="o")
     ax.set_xlim(0, metadata['header']['BoxSize'][0])
@@ -218,7 +276,7 @@ if __name__ == "__main__":
             time_text,
             metadata,
             ax,
-            extra,
+            args["cmap"],
             norm
         ],
         interval=50,
