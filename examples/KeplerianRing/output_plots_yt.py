@@ -143,17 +143,27 @@ def get_density_r(snapshot, filename="keplerian_ring", binrange=(0, 5), binnumbe
     return bin_density_r(*data, binrange, binnumber)
 
 
-def get_derived_data(minsnap, maxsnap, filename="keplerian_ring"):
+def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50):
     """
     Gets the derived data from our snapshots, i.e. the
     density(r) profile and the chi squared (based on the
     difference between the minsnap and the current snapshot).
     """
 
-    initial = get_density_r(minsnap, filename)
-    other_densities = [get_density_r(snap)[1] for snap in tqdm(range(minsnap+1, maxsnap+1), desc="Densities")]
+    initial = get_density_r(minsnap, filename, binnumber=binnumber)
+    other_densities = [
+        get_density_r(snap, binnumber=binnumber)[1] for snap in tqdm(
+            range(minsnap+1, maxsnap+1), desc="Densities"
+        )
+    ]
     densities = [initial[1]] + other_densities
-    chisq = [chi_square(dens[5:20], initial[1][5:20]) for dens in tqdm(densities, desc="Chi Squared")]
+
+    chisq = [
+        chi_square(
+            dens[int(0.1*binnumber):int(0.4*binnumber)],
+            initial[1][int(0.1*binnumber):int(0.4*binnumber)]
+        ) for dens in tqdm(densities, desc="Chi Squared")
+    ]
 
     return initial[0], densities, chisq
 
@@ -376,6 +386,17 @@ if __name__ == "__main__":
         required=False
     )
 
+    parser.add_argument(
+        "-n",
+        "--nbins",
+        help="""
+             Number of bins in histogramming (used for the density(r) plots).
+             Default: 100.
+             """,
+        default=100,
+        required=False
+    )
+
     args = vars(parser.parse_args())
 
     filename = "keplerian_ring"
@@ -399,7 +420,7 @@ if __name__ == "__main__":
     # Now we need to do the density(r) plot.
 
     # Derived data includes density profiles and chi squared
-    derived_data = get_derived_data(snapshots[0], snapshots[2])
+    derived_data = get_derived_data(snapshots[0], snapshots[2], binnumber=int(args["nbins"]))
 
     plot_density_r(axes[3], derived_data[0], derived_data[1], snapshots)
 
