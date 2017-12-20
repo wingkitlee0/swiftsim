@@ -208,6 +208,17 @@ if __name__ == "__main__":
         required=False,
         default=None
     )
+
+    parser.add_argument(
+        "-m",
+        "--max",
+        help="""
+             Maximum radii to plot.
+             Default: 2.5.
+             """,
+        required=False,
+        default=2.5,
+    )
     
     args = vars(parser.parse_args())
 
@@ -232,6 +243,8 @@ if __name__ == "__main__":
         vmin = min([numbers0.min(), numbersend.min()])
 
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+    else:
+        norm = None
 
 
     # Initial plot setup
@@ -243,28 +256,38 @@ if __name__ == "__main__":
     ax = fig.add_subplot(111)
 
     scatter = ax.scatter([0]*n_particle, [0]*n_particle, s=0.5, marker="o")
-    ax.set_xlim(0, metadata['header']['BoxSize'][0])
-    ax.set_ylim(0, metadata['header']['BoxSize'][1])
+    diff = float(args["max"])
+    left = metadata['header']['BoxSize'][0]/2 - diff
+    right = metadata['header']['BoxSize'][0]/2 + diff
+    ax.set_xlim(left, right)
+    ax.set_ylim(left, right)
 
     offset = 0.25
-    time_text = ax.text(offset, offset, "Time: {:1.2f} | Rotations {:1.2f}".format(
-        0,
-        0/metadata['period'],
-    ))
+    time_text = ax.text(
+        offset + left,
+        offset + left,
+        "Time: {:1.2f} | Rotations {:1.2f}".format(
+            0,
+            0/metadata['period'],
+        )
+    )
 
-    ax.text(offset, metadata['header']['BoxSize'][0]-offset-0.5, "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
-        metadata['code']['Git Branch'].decode("utf-8"),
-        metadata['code']['Git Revision'].decode("utf-8"),
-        metadata['code']['Compiler Name'].decode("utf-8"),
-        metadata['code']['Compiler Version'].decode("utf-8"),
-        metadata['hydro']['Scheme'].decode("utf-8"),
-        metadata['hydro']['Kernel eta'][0],
-    ))
+    ax.text(
+        offset + left,
+        right-offset-0.35,
+        "Code: {} {} | {} {} \nHydro {}\n$\eta$={:1.4f}".format(
+            metadata['code']['Git Branch'].decode("utf-8"),
+            metadata['code']['Git Revision'].decode("utf-8"),
+            metadata['code']['Compiler Name'].decode("utf-8"),
+            metadata['code']['Compiler Version'].decode("utf-8"),
+            metadata['hydro']['Scheme'].decode("utf-8"),
+            metadata['hydro']['Kernel eta'][0],
+        )
+    )
 
     ax.set_title("Keplerian Ring Test")
     ax.set_xlabel("$x$ position")
     ax.set_ylabel("$y$ position")
-
 
     
     anim = anim.FuncAnimation(
