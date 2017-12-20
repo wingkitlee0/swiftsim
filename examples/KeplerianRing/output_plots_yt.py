@@ -41,6 +41,7 @@ from make_movie import get_metadata
 
 
 yt.funcs.mylog.setLevel(50)
+tqdm.monitor_interval = 0
 
 
 class InternalUnitSystemError(Exception):
@@ -150,8 +151,8 @@ def get_derived_data(minsnap, maxsnap, filename="keplerian_ring"):
     """
 
     initial = get_density_r(minsnap, filename)
-    densities = [get_density_r(snap)[1] for snap in tqdm(range(minsnap+1, maxsnap+1), desc="Densities")]
-    densities = [initial[1]] + densities
+    other_densities = [get_density_r(snap)[1] for snap in tqdm(range(minsnap+1, maxsnap+1), desc="Densities")]
+    densities = [initial[1]] + other_densities
     chisq = [chi_square(dens[5:20], initial[1][5:20]) for dens in tqdm(densities, desc="Chi Squared")]
 
     return initial[0], densities, chisq
@@ -322,10 +323,63 @@ def convert_snapshot_number_to_rotations_at(r, snapnum, filename):
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse as ap
+
+    parser = ap.ArgumentParser(
+        description="""
+                    Plotting code for the Keplerian Ring test. Uses yt to make
+                    surface density plots.
+                    """
+    )
+
+    parser.add_argument(
+        "-b",
+        "--beginning",
+        help="""
+             Initial snapshot to start analysis at.
+             Default: 0.
+             """,
+        default=0,
+        required=False
+    )
+
+    parser.add_argument(
+        "-m",
+        "--middle",
+        help="""
+             Middle snapshot in the top row of three surface density plots.
+             Default: 100.
+             """,
+        default=100,
+        required=False
+    )
+
+    parser.add_argument(
+        "-e",
+        "--end",
+        help="""
+             Snapshot to end the analysis at.
+             Default: 200.
+             """,
+        default=200,
+        required=False
+    )
+
+    parser.add_argument(
+        "-f",
+        "--filename",
+        help="""
+             Filename of the output.
+             Default: plot.png
+             """,
+        default="plot.png",
+        required=False
+    )
+
+    args = vars(parser.parse_args())
 
     filename = "keplerian_ring"
-    snapshots = [int(x) for x in sys.argv[1:]]
+    snapshots = [int(x) for x in [args["beginning"], args["middle"], args["end"]]]
 
     figure = plt.figure(figsize=(12, 10))
     axes = get_axes_grid(figure)
@@ -353,6 +407,6 @@ if __name__ == "__main__":
 
     plot_extra_info(axes[5], "keplerian_ring_0000.hdf5")
 
-    figure.savefig("test.png", dpi=300)
+    figure.savefig(args["filename"], dpi=300)
 
 
