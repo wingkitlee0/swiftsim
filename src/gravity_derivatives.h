@@ -33,6 +33,7 @@
 /* Local headers. */
 #include "inline.h"
 #include "kernel_gravity.h"
+#include "kernel_long_gravity.h"
 
 /**
  * @brief Structure containing all the derivatives of the potential field

@@ -34,6 +34,8 @@
 #include "inline.h"
 #include "kernel_gravity.h"
 
+#error aa
+
 #if 0
 
 /*************************/

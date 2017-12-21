@@ -33,7 +33,6 @@
 #include "error.h"
 #include "gravity_derivatives.h"
 #include "gravity_properties.h"
-#include "gravity_softened_derivatives.h"
 #include "inline.h"
 #include "kernel_gravity.h"
 #include "part.h"
