@@ -131,7 +131,7 @@ struct potential_derivatives_M2P {
 __attribute__((always_inline)) INLINE static void
 compute_potential_derivatives_M2L(float r_x, float r_y, float r_z, float r2,
                                   float r_inv, float eps, float eps_inv,
-                                  int periodic,
+                                  int periodic, float rs_inv,
                                   struct potential_derivatives_M2L *pot) {
 
   float Dt_1;
@@ -178,22 +178,43 @@ compute_potential_derivatives_M2L(float r_x, float r_y, float r_z, float r2,
     /* Un-softened truncated case */
   } else if (periodic && r2 > eps * eps) {
 
-    Dt_1 = r_inv;
+    /* Get the derivatives of the truncated potential */
+    const float r = r2 * r_inv;
+    struct truncated_derivatives derivs;
+    kernel_long_grav_derivatives(r, rs_inv, &derivs);
+
+    Dt_1 = derivs.chi_0 * r_inv;
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 0
     const float r_inv2 = r_inv * r_inv;
-    Dt_3 = -1.f * Dt_1 * r_inv2; /* -1 / r^3 */
+    const float r_inv3 = r_inv2 * r_inv;
+    Dt_3 = (r * derivs.chi_1 - derivs.chi_0) * r_inv3;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 1
-    Dt_5 = -3.f * Dt_3 * r_inv2; /* 3 / r^5 */
+    const float r_inv5 = r_inv2 * r_inv3;
+    Dt_5 =
+        (r * r * derivs.chi_2 - 3.f * r * derivs.chi_1 + 3.f * derivs.chi_0) *
+        r_inv5;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 2
-    Dt_7 = -5.f * Dt_5 * r_inv2; /* -15 / r^7 */
+    const float r_inv7 = r_inv2 * r_inv5;
+    Dt_7 = (r * r * r * derivs.chi_3 - 6.f * r * r * derivs.chi_2 +
+            15.f * r * derivs.chi_1 - 15.f * derivs.chi_0) *
+           r_inv7;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 3
-    Dt_9 = -7.f * Dt_7 * r_inv2; /* 105 / r^9 */
+    const float r_inv9 = r_inv2 * r_inv7;
+    Dt_9 = (r * r * r * r * derivs.chi_4 - 10.f * r * r * r * derivs.chi_3 +
+            45.f * r * r * derivs.chi_2 - 105.f * r * derivs.chi_1 +
+            105.f * derivs.chi_0) *
+           r_inv9;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 4
-    Dt_11 = -9.f * Dt_9 * r_inv2; /* -945 / r^11 */
+    const float r_inv11 = r_inv2 * r_inv9;
+    Dt_11 = (r * r * r * r * r * derivs.chi_5 -
+             15.f * r * r * r * r * derivs.chi_4 +
+             105.f * r * r * r * derivs.chi_3 - 420.f * r * r * derivs.chi_2 +
+             945.f * r * derivs.chi_1 - 945.f * derivs.chi_0) *
+            r_inv11;
 #endif
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 5
 #error "Missing implementation for order >5"
