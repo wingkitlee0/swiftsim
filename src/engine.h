@@ -68,9 +68,10 @@ enum engine_policy {
   engine_policy_reconstruct_mpoles = (1 << 12),
   engine_policy_cooling = (1 << 13),
   engine_policy_sourceterms = (1 << 14),
-  engine_policy_stars = (1 << 15)
+  engine_policy_stars = (1 << 15),
+  engine_policy_limiter = (1 << 16)
 };
-#define engine_maxpolicy 15
+#define engine_maxpolicy 16
 extern const char *engine_policy_names[];
 
 /**
@@ -139,6 +140,9 @@ struct engine {
 
   /* The highest active bin at this time */
   timebin_t max_active_bin;
+
+  /* The lowest active bin at this time */
+  timebin_t min_active_bin;
 
   /* Time step */
   double timeStep;

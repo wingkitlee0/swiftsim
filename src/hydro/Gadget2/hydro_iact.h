@@ -958,4 +958,30 @@ runner_iact_nonsym_2_vec_force(
 
 #endif
 
+/**
+ * @brief Timestep limiter loop
+ */
+__attribute__((always_inline)) INLINE static void runner_iact_limiter(
+    float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
+
+  /* Nothing to do here if both particles are active */
+}
+
+/**
+ * @brief Timestep limiter loop (non-symmetric version)
+ */
+__attribute__((always_inline)) INLINE static void runner_iact_nonsym_limiter(
+    float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
+
+  if (pi->id == ICHECK) message("here (active)!");
+
+  if (pj->id == ICHECK) message("here (neighbour)!");
+
+  /* Wake up the neighbour? */
+  if (pi->force.v_sig > 4.1f * pj->force.v_sig) {
+    // pj->wakeup = time_bin_awake;
+    if (pj->id == ICHECK) message("wake-up");
+  }
+}
+
 #endif /* SWIFT_GADGET2_HYDRO_IACT_H */

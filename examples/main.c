@@ -84,6 +84,8 @@ void print_help_message() {
   printf("  %2s %14s %s\n", "-g", "",
          "Run with an external gravitational potential.");
   printf("  %2s %14s %s\n", "-G", "", "Run with self-gravity.");
+  printf("  %2s %14s %s\n", "-L", "",
+         "Run with time-step limiter for hydro-dynamics.");
   printf("  %2s %14s %s\n", "-M", "",
          "Reconstruct the multipoles every time-step.");
   printf("  %2s %14s %s\n", "-n", "{int}",
@@ -167,6 +169,7 @@ int main(int argc, char *argv[]) {
   int with_cooling = 0;
   int with_self_gravity = 0;
   int with_hydro = 0;
+  int with_limiter = 0;
   int with_stars = 0;
   int with_fp_exceptions = 0;
   int with_drift_all = 0;
@@ -181,7 +184,7 @@ int main(int argc, char *argv[]) {
 
   /* Parse the parameters */
   int c;
-  while ((c = getopt(argc, argv, "acCdDef:FgGhMn:P:sSt:Tv:y:Y:")) != -1)
+  while ((c = getopt(argc, argv, "acCdDef:FgGhLMn:P:sSt:Tv:y:Y:")) != -1)
     switch (c) {
       case 'a':
 #if defined(HAVE_SETAFFINITY) && defined(HAVE_LIBNUMA)
@@ -228,6 +231,9 @@ int main(int argc, char *argv[]) {
       case 'h':
         if (myrank == 0) print_help_message();
         return 0;
+      case 'L':
+        with_limiter = 1;
+        break;
       case 'M':
         with_mpole_reconstruction = 1;
         break;
@@ -629,6 +635,7 @@ int main(int argc, char *argv[]) {
   if (with_cooling) engine_policies |= engine_policy_cooling;
   if (with_sourceterms) engine_policies |= engine_policy_sourceterms;
   if (with_stars) engine_policies |= engine_policy_stars;
+  if (with_limiter) engine_policies |= engine_policy_limiter;
 
   /* Initialize the engine with the space and policies. */
   if (myrank == 0) clocks_gettime(&tic);

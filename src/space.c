@@ -208,6 +208,7 @@ void space_rebuild_recycle_mapper(void *map_data, int num_elements,
     c->density = NULL;
     c->gradient = NULL;
     c->force = NULL;
+    c->limiter = NULL;
     c->grav = NULL;
     c->dx_max_part = 0.0f;
     c->dx_max_gpart = 0.0f;
@@ -224,6 +225,7 @@ void space_rebuild_recycle_mapper(void *map_data, int num_elements,
     c->kick1 = NULL;
     c->kick2 = NULL;
     c->timestep = NULL;
+    c->timestep_limiter = NULL;
     c->drift_part = NULL;
     c->drift_gpart = NULL;
     c->cooling = NULL;
@@ -3164,6 +3166,41 @@ void space_check_timesteps(struct space *s) {
   for (int i = 0; i < s->nr_cells; ++i) {
     cell_check_timesteps(&s->cells_top[i]);
   }
+#else
+  error("Calling debugging code without debugging flag activated.");
+#endif
+}
+
+/**
+ * @brief #threadpool mapper function for the limiter debugging check
+ */
+void space_check_limiter_mapper(void *map_data, int nr_parts,
+                                void *extra_data) {
+#ifdef SWIFT_DEBUG_CHECKS
+  /* Unpack the data */
+  struct part *restrict parts = (struct part *)map_data;
+
+  /* Verify that all limited particles have been treated */
+  for (int k = 0; k < nr_parts; k++) {
+    if (parts[k].wakeup == time_bin_awake) error("Particle still woken up!");
+  }
+#else
+  error("Calling debugging code without debugging flag activated.");
+#endif
+}
+
+/**
+ * @brief Checks that all particles have their wakeup flag in a correct state.
+ *
+ * Should only be used for debugging purposes.
+ *
+ * @param s The #space to check.
+ */
+void space_check_limiter(struct space *s) {
+#ifdef SWIFT_DEBUG_CHECKS
+
+  threadpool_map(&s->e->threadpool, space_check_limiter_mapper, s->parts,
+                 s->nr_parts, sizeof(struct part), 1000, NULL);
 #else
   error("Calling debugging code without debugging flag activated.");
 #endif

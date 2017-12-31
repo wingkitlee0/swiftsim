@@ -1107,6 +1107,7 @@ void cell_clean_links(struct cell *c, void *data) {
   c->density = NULL;
   c->gradient = NULL;
   c->force = NULL;
+  c->limiter = NULL;
   c->grav = NULL;
 }
 
@@ -1389,6 +1390,14 @@ void cell_clear_drift_flags(struct cell *c, void *data) {
 }
 
 /**
+ * @brief Clear the limiter flags on the given cell.
+ */
+void cell_clear_limiter_flags(struct cell *c, void *data) {
+  c->do_limiter = 0;
+  c->do_sub_limiter = 0;
+}
+
+/**
  * @brief Activate the #part drifts on the given cell.
  */
 void cell_activate_drift_part(struct cell *c, struct scheduler *s) {
@@ -1409,6 +1418,33 @@ void cell_activate_drift_part(struct cell *c, struct scheduler *s) {
       parent->do_sub_drift = 1;
       if (parent == c->super_hydro) {
         scheduler_activate(s, parent->drift_part);
+        break;
+      }
+    }
+  }
+}
+
+/**
+ * @brief Activate the drifts on the given cell.
+ */
+void cell_activate_limiter(struct cell *c, struct scheduler *s) {
+
+  /* If this cell is already marked for drift, quit early. */
+  if (c->do_limiter) return;
+
+  /* Mark this cell for drifting. */
+  c->do_limiter = 1;
+
+  /* Set the do_sub_limiter all the way up and activate the super limiter
+     if this has not yet been done. */
+  if (c == c->super) {
+    scheduler_activate(s, c->timestep_limiter);
+  } else {
+    for (struct cell *parent = c->parent;
+         parent != NULL && !parent->do_sub_limiter; parent = parent->parent) {
+      parent->do_sub_limiter = 1;
+      if (parent == c->super) {
+        scheduler_activate(s, parent->timestep_limiter);
         break;
       }
     }
@@ -1500,6 +1536,7 @@ void cell_activate_sorts(struct cell *c, int sid, struct scheduler *s) {
 void cell_activate_subcell_hydro_tasks(struct cell *ci, struct cell *cj,
                                        struct scheduler *s) {
   const struct engine *e = s->space->e;
+  const int with_limiter = (e->policy & engine_policy_limiter);
 
   /* Store the current dx_max and h_max values. */
   ci->dx_max_old = ci->dx_max_part;
@@ -1531,6 +1568,7 @@ void cell_activate_subcell_hydro_tasks(struct cell *ci, struct cell *cj,
 
       /* We have reached the bottom of the tree: activate drift */
       cell_activate_drift_part(ci, s);
+      if (with_limiter) cell_activate_limiter(ci, s);
     }
   }
 
@@ -1757,6 +1795,10 @@ void cell_activate_subcell_hydro_tasks(struct cell *ci, struct cell *cj,
     if (ci->nodeID == engine_rank) cell_activate_drift_part(ci, s);
     if (cj->nodeID == engine_rank) cell_activate_drift_part(cj, s);
 
+    /* Also activate the time-step limiter */
+    if (ci->nodeID == engine_rank && with_limiter) cell_activate_limiter(ci, s);
+    if (cj->nodeID == engine_rank && with_limiter) cell_activate_limiter(cj, s);
+
     /* Do we need to sort the cells? */
     cell_activate_sorts(ci, sid, s);
     cell_activate_sorts(cj, sid, s);
@@ -1953,6 +1995,7 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
 
   struct engine *e = s->space->e;
   const int nodeID = e->nodeID;
+  const int with_limiter = (e->policy & engine_policy_limiter);
   int rebuild = 0;
 
   /* Un-skip the density tasks involved with this cell. */
@@ -1971,6 +2014,7 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
       /* Activate hydro drift */
       if (t->type == task_type_self) {
         if (ci->nodeID == nodeID) cell_activate_drift_part(ci, s);
+        if (ci->nodeID == nodeID && with_limiter) cell_activate_limiter(ci, s);
       }
 
       /* Set the correct sorting flags and activate hydro drifts */
@@ -1984,6 +2028,10 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
         /* Activate the drift tasks. */
         if (ci->nodeID == nodeID) cell_activate_drift_part(ci, s);
         if (cj->nodeID == nodeID) cell_activate_drift_part(cj, s);
+
+        /* Activate the limiter tasks. */
+        if (ci->nodeID == nodeID && with_limiter) cell_activate_limiter(ci, s);
+        if (cj->nodeID == nodeID && with_limiter) cell_activate_limiter(cj, s);
 
         /* Check the sorts and activate them if needed. */
         cell_activate_sorts(ci, t->flags, s);
@@ -2093,6 +2141,8 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
     for (struct link *l = c->gradient; l != NULL; l = l->next)
       scheduler_activate(s, l->t);
     for (struct link *l = c->force; l != NULL; l = l->next)
+      scheduler_activate(s, l->t);
+    for (struct link *l = c->limiter; l != NULL; l = l->next)
       scheduler_activate(s, l->t);
 
     if (c->extra_ghost != NULL) scheduler_activate(s, c->extra_ghost);

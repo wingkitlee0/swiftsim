@@ -216,6 +216,9 @@ struct cell {
   /*! Linked list of the tasks computing this cell's hydro forces. */
   struct link *force;
 
+  /*! Linked list of the tasks computing this cell's limiter. */
+  struct link *limiter;
+
   /*! Linked list of the tasks computing this cell's gravity forces. */
   struct link *grav;
 
@@ -251,6 +254,9 @@ struct cell {
 
   /*! The task to compute time-steps */
   struct task *timestep;
+
+  /*! The task to limit the time-step of inactive particles */
+  struct task *timestep_limiter;
 
   /*! Task linking the FFT mesh to the rest of gravity tasks */
   struct task *grav_ghost_in, *grav_ghost_out;
@@ -446,6 +452,12 @@ struct cell {
   /*! Do any of this cell's sub-cells need to be sorted? */
   char do_sub_sort;
 
+  /*! Does this cell need to be limited? */
+  char do_limiter;
+
+  /*! Do any of this cell's sub-cells need to be limited? */
+  char do_sub_limiter;
+
 #ifdef SWIFT_DEBUG_CHECKS
   /* Cell ID (for debugging) */
   int cellID;
@@ -516,7 +528,9 @@ void cell_activate_subcell_external_grav_tasks(struct cell *ci,
 void cell_activate_drift_part(struct cell *c, struct scheduler *s);
 void cell_activate_drift_gpart(struct cell *c, struct scheduler *s);
 void cell_activate_sorts(struct cell *c, int sid, struct scheduler *s);
+void cell_activate_limiter(struct cell *c, struct scheduler *s);
 void cell_clear_drift_flags(struct cell *c, void *data);
+void cell_clear_limiter_flags(struct cell *c, void *data);
 void cell_set_super_mapper(void *map_data, int num_elements, void *extra_data);
 int cell_has_tasks(struct cell *c);
 
