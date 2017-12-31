@@ -2444,6 +2444,8 @@ INLINE static void gravity_M2P(const struct multipole *ma,
                                const struct gravity_props *props,
                                const double loc[3], struct gpart *gp) {
 
+  error("Dead function. Do not use.");
+
 #if SELF_GRAVITY_MULTIPOLE_ORDER > 0
 
   const float eps2 = props->epsilon2;
