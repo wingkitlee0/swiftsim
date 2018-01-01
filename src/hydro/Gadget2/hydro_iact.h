@@ -973,17 +973,9 @@ __attribute__((always_inline)) INLINE static void runner_iact_limiter(
 __attribute__((always_inline)) INLINE static void runner_iact_nonsym_limiter(
     float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
 
-  // if (pi->id == ICHECK) message("here (active)!");
-
-  // if (pj->id == ICHECK) message("here (neighbour)!");
-
-  // error("aa");
-
   /* Wake up the neighbour? */
   if (pi->force.v_sig > 4.1f * pj->force.v_sig) {
     pj->wakeup = time_bin_awake;
-    // if (pj->id == ICHECK) message("wake-up");
-    // message("wake-up");
   }
 }
 

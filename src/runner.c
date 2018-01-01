@@ -676,6 +676,8 @@ void runner_do_ghost(struct runner *r, struct cell *c, int timer) {
         struct part *p = &parts[pid[i]];
         struct xpart *xp = &xparts[pid[i]];
 
+        if (p->id == ICHECK) message("ghost (active)");
+
 #ifdef SWIFT_DEBUG_CHECKS
         /* Is this part within the timestep? */
         if (!part_is_active(p, e)) error("Ghost applied to inactive particle");
@@ -990,22 +992,37 @@ void runner_do_kick1(struct runner *r, struct cell *c, int timer) {
       /* If particle needs to be kicked */
       if (part_is_starting(p, e)) {
 
-        const integertime_t ti_step = get_integer_timestep(p->time_bin);
-        const integertime_t ti_begin =
-            get_integer_time_begin(ti_current + 1, p->time_bin);
+        integertime_t ti_begin, ti_end, ti_step;
+
+        if (p->id == ICHECK) message("here (starting)");
+
+        if (p->wakeup == time_bin_not_awake) {
+
+          /* Time-step from a regular kick */
+          ti_step = get_integer_timestep(p->time_bin);
+          ti_begin = get_integer_time_begin(ti_current + 1, p->time_bin);
+          ti_end = ti_begin + ti_step;
+        }
+
+        else {
+
+          if (p->id == ICHECK) message("here (woken up)!");
+
+          /* /\* Time-step that follows a wake-up call *\/ */
+          /* ti_begin = get_integer_time_begin(ti_current, p->wakeup); */
+          /* ti_end = get_integer_time_end(ti_current, p->time_bin); */
+          /* ti_step = ti_end - ti_begin; */
+          /* p->wakeup = time_bin_not_awake; */
+          continue;
+        }
 
 #ifdef SWIFT_DEBUG_CHECKS
-        const integertime_t ti_end =
-            get_integer_time_end(ti_current + 1, p->time_bin);
-
         if (ti_begin != ti_current)
           error(
               "Particle in wrong time-bin, ti_end=%lld, ti_begin=%lld, "
-              "ti_step=%lld time_bin=%d ti_current=%lld",
-              ti_end, ti_begin, ti_step, p->time_bin, ti_current);
+              "ti_step=%lld time_bin=%d ti_current=%lld wakeup=%d",
+              ti_end, ti_begin, ti_step, p->time_bin, ti_current, p->wakeup);
 #endif
-
-        if (p->id == ICHECK) message("here");
 
         /* do the kick */
         kick_part(p, xp, ti_begin, ti_begin + ti_step / 2, timeBase);
@@ -1154,6 +1171,7 @@ void runner_do_kick2(struct runner *r, struct cell *c, int timer) {
           ti_begin = get_integer_time_begin(ti_current, p->wakeup);
           ti_end = get_integer_time_end(ti_current, p->time_bin);
           ti_step = ti_end - ti_begin;
+          p->wakeup = time_bin_awake;
         }
 
 #ifdef SWIFT_DEBUG_CHECKS
@@ -1557,9 +1575,9 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
     }
 
     /* Store the updated values */
-    c->ti_hydro_end_min = ti_hydro_end_min;
-    c->ti_hydro_end_max = ti_hydro_end_max;
-    c->ti_hydro_beg_max = ti_hydro_beg_max;
+    c->ti_hydro_end_min = min(c->ti_hydro_end_min, ti_hydro_end_min);
+    c->ti_hydro_end_max = max(c->ti_hydro_end_max, ti_hydro_end_max);
+    c->ti_hydro_beg_max = max(c->ti_hydro_beg_max, ti_hydro_beg_max);
 
   } else if (!c->split && force) {
 
@@ -1596,9 +1614,9 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
     }
 
     /* Store the updated values */
-    c->ti_hydro_end_min = ti_hydro_end_min;
-    c->ti_hydro_end_max = ti_hydro_end_max;
-    c->ti_hydro_beg_max = ti_hydro_beg_max;
+    c->ti_hydro_end_min = min(c->ti_hydro_end_min, ti_hydro_end_min);
+    c->ti_hydro_end_max = max(c->ti_hydro_end_max, ti_hydro_end_max);
+    c->ti_hydro_beg_max = max(c->ti_hydro_beg_max, ti_hydro_beg_max);
   }
 
   /* Clear the limiter flags. */

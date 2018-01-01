@@ -197,10 +197,8 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
         /* Make sure it is not run before kick2 */
         scheduler_addunlock(s, c->timestep, c->timestep_limiter);
         scheduler_addunlock(s, c->timestep_limiter, c->kick1);
-      } else {
-        scheduler_addunlock(s, c->kick2, c->timestep);
       }
-
+      scheduler_addunlock(s, c->kick2, c->timestep);
       scheduler_addunlock(s, c->timestep, c->kick1);
     }
 
@@ -2699,7 +2697,6 @@ static inline void engine_make_hydro_loops_dependencies(
   if (with_limiter) {
     scheduler_addunlock(sched, c->super->kick2, limiter);
     scheduler_addunlock(sched, limiter, c->super->timestep_limiter);
-    scheduler_addunlock(sched, limiter, c->super->timestep);
   }
 }
 
@@ -4424,7 +4421,8 @@ void engine_step(struct engine *e) {
   e->timeStep = (e->ti_current - e->ti_old) * e->timeBase;
   e->step_props = engine_step_prop_none;
 
-  message("min=%d max=%d", e->min_active_bin, e->max_active_bin);
+  message("ti_current=%lld min=%d max=%d", e->ti_current, e->min_active_bin,
+          e->max_active_bin);
 
   /* Prepare the tasks to be launched, rebuild or repartition if needed. */
   engine_prepare(e);
