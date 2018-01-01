@@ -125,6 +125,9 @@ struct part {
   /* Particle time-bin */
   timebin_t time_bin;
 
+  /* Need waking-up ? */
+  char wakeup;
+
 #ifdef SWIFT_DEBUG_CHECKS
 
   /* Time of the last drift */

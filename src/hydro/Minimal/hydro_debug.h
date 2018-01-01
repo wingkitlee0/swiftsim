@@ -32,7 +32,6 @@
  * Price, D., Journal of Computational Physics, 2012, Volume 231, Issue 3,
  * pp. 759-794.
  */
-
 __attribute__((always_inline)) INLINE static void hydro_debug_particle(
     const struct part* p, const struct xpart* xp) {
   printf(
@@ -40,11 +39,12 @@ __attribute__((always_inline)) INLINE static void hydro_debug_particle(
       "v=[%.3e,%.3e,%.3e],v_full=[%.3e,%.3e,%.3e] \n a=[%.3e,%.3e,%.3e], "
       "u=%.3e, du/dt=%.3e v_sig=%.3e, P=%.3e\n"
       "h=%.3e, dh/dt=%.3e wcount=%d, m=%.3e, dh_drho=%.3e, rho=%.3e, "
-      "time_bin=%d\n",
+      "time_bin=%d wakeup=%d\n",
       p->x[0], p->x[1], p->x[2], p->v[0], p->v[1], p->v[2], xp->v_full[0],
       xp->v_full[1], xp->v_full[2], p->a_hydro[0], p->a_hydro[1], p->a_hydro[2],
       p->u, p->u_dt, p->force.v_sig, p->force.pressure, p->h, p->force.h_dt,
-      (int)p->density.wcount, p->mass, p->density.rho_dh, p->rho, p->time_bin);
+      (int)p->density.wcount, p->mass, p->density.rho_dh, p->rho, p->time_bin,
+      p->wakeup);
 }
 
 #endif /* SWIFT_MINIMAL_HYDRO_DEBUG_H */

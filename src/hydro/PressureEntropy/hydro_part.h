@@ -138,8 +138,11 @@ struct part {
     } force;
   };
 
-  /* Time-step length */
+  /*! Time-step length */
   timebin_t time_bin;
+
+  /*! Need waking-up ? */
+  char wakeup;
 
 #ifdef SWIFT_DEBUG_CHECKS
 

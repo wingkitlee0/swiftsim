@@ -358,4 +358,25 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
   pi->entropy_dt += mj * visc_term * r_inv * dvdr;
 }
 
+/**
+ * @brief Timestep limiter loop
+ */
+__attribute__((always_inline)) INLINE static void runner_iact_limiter(
+    float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
+
+  /* Nothing to do here if both particles are active */
+}
+
+/**
+ * @brief Timestep limiter loop (non-symmetric version)
+ */
+__attribute__((always_inline)) INLINE static void runner_iact_nonsym_limiter(
+    float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
+
+  /* Wake up the neighbour? */
+  if (pi->force.v_sig > 4.1f * pj->force.v_sig) {
+    pj->wakeup = time_bin_awake;
+  }
+}
+
 #endif /* SWIFT_PRESSURE_ENTROPY_HYDRO_IACT_H */
