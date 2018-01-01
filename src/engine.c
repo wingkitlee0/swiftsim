@@ -190,6 +190,8 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
       c->timestep = scheduler_addtask(s, task_type_timestep, task_subtype_none,
                                       0, 0, c, NULL);
 
+      scheduler_addunlock(s, c->kick2, c->timestep);
+
       if (with_limiter) {
         c->timestep_limiter = scheduler_addtask(
             s, task_type_timestep_limiter, task_subtype_none, 0, 0, c, NULL);
@@ -197,9 +199,9 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
         /* Make sure it is not run before kick2 */
         scheduler_addunlock(s, c->timestep, c->timestep_limiter);
         scheduler_addunlock(s, c->timestep_limiter, c->kick1);
+      } else {
+        scheduler_addunlock(s, c->timestep, c->kick1);
       }
-      scheduler_addunlock(s, c->kick2, c->timestep);
-      scheduler_addunlock(s, c->timestep, c->kick1);
     }
 
   } else { /* We are above the super-cell so need to go deeper */
