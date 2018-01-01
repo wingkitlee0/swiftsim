@@ -197,9 +197,6 @@ __attribute__((always_inline)) INLINE static void hydro_init_part(
   p->num_ngb_density = 0;
 #endif
 
-  if (p->id == ICHECK) message("init (active)");
-
-  // p->wakeup = time_bin_not_awake;
   p->rho = 0.f;
   p->density.wcount = 0.f;
   p->density.wcount_dh = 0.f;

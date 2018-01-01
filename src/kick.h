@@ -86,8 +86,6 @@ __attribute__((always_inline)) INLINE static void kick_part(
         p->ti_kick, ti_start, ti_end, p->time_bin, p->wakeup);
 
   p->ti_kick = ti_end;
-
-  if (p->id == ICHECK) message("Kicking particle to ti_kick=%lld", p->ti_kick);
 #endif
 
   /* Get the acceleration */
