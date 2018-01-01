@@ -3619,7 +3619,7 @@ int engine_estimate_nr_tasks(struct engine *e) {
   int n1 = 0;
   int n2 = 0;
   if (e->policy & engine_policy_hydro) {
-    n1 += 54;
+    n1 += 36;
     n2 += 2;
 #ifdef WITH_MPI
     n1 += 6;
@@ -3631,6 +3631,10 @@ int engine_estimate_nr_tasks(struct engine *e) {
     n1 += 2;
 #endif
 #endif
+  }
+  if (e->policy & engine_policy_limiter) {
+    n1 += 18;
+    n2 += 1;
   }
   if (e->policy & engine_policy_self_gravity) {
     n1 += 32;

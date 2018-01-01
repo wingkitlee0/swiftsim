@@ -998,7 +998,6 @@ void runner_do_kick1(struct runner *r, struct cell *c, int timer) {
         /* Skip particles that have been woken up and treated by the limiter. */
         if (p->wakeup != time_bin_not_awake) continue;
 
-        /* Time-step from a regular kick */
         const integertime_t ti_step = get_integer_timestep(p->time_bin);
         const integertime_t ti_begin =
             get_integer_time_begin(ti_current + 1, p->time_bin);
