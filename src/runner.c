@@ -1005,6 +1005,8 @@ void runner_do_kick1(struct runner *r, struct cell *c, int timer) {
               ti_end, ti_begin, ti_step, p->time_bin, ti_current);
 #endif
 
+        if (p->id == ICHECK) message("here");
+
         /* do the kick */
         kick_part(p, xp, ti_begin, ti_begin + ti_step / 2, timeBase);
 
@@ -1127,6 +1129,8 @@ void runner_do_kick2(struct runner *r, struct cell *c, int timer) {
       struct part *restrict p = &parts[k];
       struct xpart *restrict xp = &xparts[k];
 
+      if (p->id == ICHECK) message("here");
+
       /* If particle needs to be kicked */
       if (part_is_active(p, e)) {
 
@@ -1134,7 +1138,7 @@ void runner_do_kick2(struct runner *r, struct cell *c, int timer) {
 
         if (p->id == ICHECK) message("here (active)!");
 
-        if (1 || p->wakeup == time_bin_not_awake) {
+        if (p->wakeup == time_bin_not_awake) {
 
           /* Time-step from a regular kick */
           ti_step = get_integer_timestep(p->time_bin);
@@ -1523,8 +1527,6 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
   struct part *restrict parts = c->parts;
   struct xpart *restrict xparts = c->xparts;
 
-  return;
-
   TIMER_TIC;
 
 #ifdef SWIFT_DEBUG_CHECKS
@@ -1578,8 +1580,6 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
 
       /* Bip, bip, bip... wake-up time */
       if (p->wakeup == time_bin_awake) {
-
-        error("oo");
 
         if (p->id == ICHECK) message("here (awake)!");
 
@@ -2029,7 +2029,7 @@ void *runner_main(void *data) {
           else if (t->subtype == task_subtype_force)
             runner_doself2_branch_force(r, ci);
           else if (t->subtype == task_subtype_limiter)
-            break;  // runner_doself2_branch_limiter(r, ci);
+            runner_doself2_branch_limiter(r, ci);
           else if (t->subtype == task_subtype_grav)
             runner_doself_grav(r, ci, 1);
           else if (t->subtype == task_subtype_external_grav)
@@ -2048,7 +2048,7 @@ void *runner_main(void *data) {
           else if (t->subtype == task_subtype_force)
             runner_dopair2_branch_force(r, ci, cj);
           else if (t->subtype == task_subtype_limiter)
-            break;  // runner_dopair2_branch_limiter(r, ci, cj);
+            runner_dopair2_branch_limiter(r, ci, cj);
           else if (t->subtype == task_subtype_grav)
             runner_dopair_grav(r, ci, cj, 1);
           else
@@ -2065,7 +2065,7 @@ void *runner_main(void *data) {
           else if (t->subtype == task_subtype_force)
             runner_dosub_self2_force(r, ci, 1);
           else if (t->subtype == task_subtype_limiter)
-            break;  // runner_dosub_self2_limiter(r, ci, 1);
+            runner_dosub_self2_limiter(r, ci, 1);
           else
             error("Unknown/invalid task subtype (%d).", t->subtype);
           break;
@@ -2080,7 +2080,7 @@ void *runner_main(void *data) {
           else if (t->subtype == task_subtype_force)
             runner_dosub_pair2_force(r, ci, cj, t->flags, 1);
           else if (t->subtype == task_subtype_limiter)
-            break;  // runner_dosub_pair2_limiter(r, ci, cj, t->flags, 1);
+            runner_dosub_pair2_limiter(r, ci, cj, t->flags, 1);
           else
             error("Unknown/invalid task subtype (%d).", t->subtype);
           break;
@@ -2121,7 +2121,7 @@ void *runner_main(void *data) {
           runner_do_timestep(r, ci, 1);
           break;
         case task_type_timestep_limiter:
-          // runner_do_limiter(r, ci, 0, 1);
+          runner_do_limiter(r, ci, 0, 1);
           break;
 #ifdef WITH_MPI
         case task_type_send:

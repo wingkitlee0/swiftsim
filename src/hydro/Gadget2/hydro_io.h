@@ -89,7 +89,7 @@ void convert_part_pos(const struct engine* e, const struct part* p,
 void hydro_write_particles(const struct part* parts, struct io_props* list,
                            int* num_fields) {
 
-  *num_fields = 10;
+  *num_fields = 13;
 
 #ifdef DEBUG_INTERACTIONS_SPH
   *num_fields += 4;
@@ -117,6 +117,14 @@ void hydro_write_particles(const struct part* parts, struct io_props* list,
                                               parts, convert_u);
   list[9] = io_make_output_field_convert_part(
       "Pressure", FLOAT, 1, UNIT_CONV_PRESSURE, parts, convert_P);
+
+  list[10] = io_make_output_field("TimeBin", CHAR, 1, UNIT_CONV_NO_UNITS, parts,
+                                  time_bin);
+  list[11] = io_make_output_field("Wakeup", CHAR, 1, UNIT_CONV_NO_UNITS, parts,
+                                  wakeup);
+  list[12] = io_make_output_field("v_sig", FLOAT, 1, UNIT_CONV_SPEED, parts,
+                                  force.v_sig);
+
 #ifdef DEBUG_INTERACTIONS_SPH
   list[10] = io_make_output_field("Num_ngb_density", INT, 1, UNIT_CONV_NO_UNITS,
                                   parts, num_ngb_density);
