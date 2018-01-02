@@ -486,3 +486,24 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
 
   runner_iact_fluxes_common(r2, dx, hi, hj, pi, pj, 0);
 }
+
+/**
+ * @brief Timestep limiter loop
+ */
+__attribute__((always_inline)) INLINE static void runner_iact_limiter(
+    float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
+
+  /* Nothing to do here if both particles are active */
+}
+
+/**
+ * @brief Timestep limiter loop (non-symmetric version)
+ */
+__attribute__((always_inline)) INLINE static void runner_iact_nonsym_limiter(
+    float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
+
+  /* Wake up the neighbour? */
+  if (pi->timestepvars.vmax > 4.1f * pj->timestepvars.vmax) {
+    pj->wakeup = time_bin_awake;
+  }
+}
