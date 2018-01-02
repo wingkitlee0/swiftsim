@@ -4452,14 +4452,17 @@ void engine_step(struct engine *e) {
   if (e->nodeID == 0) {
 
     /* Print some information to the screen */
-    printf("  %6d %14e %14e %12zu %12zu %12zu %21.3f %6d\n", e->step, e->time,
-           e->timeStep, e->updates, e->g_updates, e->s_updates,
-           e->wallclock_time, e->step_props);
+    printf("  %6d %14e %14e %4d %4d %12zu %12zu %12zu %21.3f %6d\n", e->step,
+           e->time, e->timeStep, e->min_active_bin, e->max_active_bin,
+           e->updates, e->g_updates, e->s_updates, e->wallclock_time,
+           e->step_props);
     fflush(stdout);
 
-    fprintf(e->file_timesteps, "  %6d %14e %14e %12zu %12zu %12zu %21.3f %6d\n",
-            e->step, e->time, e->timeStep, e->updates, e->g_updates,
-            e->s_updates, e->wallclock_time, e->step_props);
+    fprintf(e->file_timesteps,
+            "  %6d %14e %14e %4d %4d %12zu %12zu %12zu %21.3f %6d\n", e->step,
+            e->time, e->timeStep, e->min_active_bin, e->max_active_bin,
+            e->updates, e->g_updates, e->s_updates, e->wallclock_time,
+            e->step_props);
     fflush(e->file_timesteps);
   }
 
@@ -5462,12 +5465,13 @@ void engine_init(struct engine *e, struct space *s,
             "Version: %s \n# "
             "Number of threads: %d\n# Number of MPI ranks: %d\n# Hydrodynamic "
             "scheme: %s\n# Hydrodynamic kernel: %s\n# No. of neighbours: %.2f "
-            "+/- %.4f\n# Eta: %f\n",
+            "+/- %.4f\n# Eta: %f\n# Config: %s\n# CFLAGS: %s\n",
             hostname(), git_branch(), git_revision(), compiler_name(),
             compiler_version(), e->nr_threads, e->nr_nodes, SPH_IMPLEMENTATION,
             kernel_name, e->hydro_properties->target_neighbours,
             e->hydro_properties->delta_neighbours,
-            e->hydro_properties->eta_neighbours);
+            e->hydro_properties->eta_neighbours, configuration_options(),
+            compilation_cflags());
 
     fprintf(e->file_timesteps,
             "# Step Properties: Rebuild=%d, Redistribute=%d, Repartition=%d, "
@@ -5476,9 +5480,10 @@ void engine_init(struct engine *e, struct space *s,
             engine_step_prop_repartition, engine_step_prop_statistics,
             engine_step_prop_snapshot);
 
-    fprintf(e->file_timesteps, "# %6s %14s %14s %12s %12s %12s %16s [%s] %6s\n",
-            "Step", "Time", "Time-step", "Updates", "g-Updates", "s-Updates",
-            "Wall-clock time", clocks_getunit(), "Props");
+    fprintf(e->file_timesteps,
+            "# %6s %14s %14s %9s %12s %12s %12s %16s [%s] %6s\n", "Step",
+            "Time", "Time-step", "Time-bins", "Updates", "g-Updates",
+            "s-Updates", "Wall-clock time", clocks_getunit(), "Props");
     fflush(e->file_timesteps);
   }
 
