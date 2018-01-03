@@ -79,7 +79,7 @@
 #undef FUNCTION
 #undef FUNCTION_NUM
 #define FUNCTION gradient
-#define FUNCTION_NUM EXTRA_HYDRO_LOOP
+#define FUNCTION_NUM GRADIENT
 #include "runner_doiact.h"
 #endif
 

@@ -1683,7 +1683,7 @@ void DOSELF1_BRANCH(struct runner *r, struct cell *c) {
 
 #if defined(SWIFT_USE_NAIVE_INTERACTIONS)
   DOSELF1_NAIVE(r, c);
-#elif defined(WITH_VECTORIZATION) && defined(GADGET2_SPH) && (FUNCTION == density)
+#elif defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
   runner_doself1_density_vec(r, c);
 #else
   DOSELF1(r, c);
@@ -1834,7 +1834,7 @@ void DOSELF2_BRANCH(struct runner *r, struct cell *c) {
 
 #if defined(SWIFT_USE_NAIVE_INTERACTIONS)
   DOSELF2_NAIVE(r, c);
-#elif defined(WITH_VECTORIZATION) && defined(GADGET2_SPH) && (FUNCTION == force)
+#elif defined(WITH_VECTORIZATION) && defined(GADGET2_SPH)
   runner_doself2_force_vec(r, c);
 #else
   DOSELF2(r, c);
