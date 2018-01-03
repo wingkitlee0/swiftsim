@@ -34,11 +34,24 @@ __attribute__((always_inline)) INLINE static integertime_t timestep_limit_part(
     struct part *restrict p, struct xpart *restrict xp,
     const struct engine *e) {
 
+  integertime_t old_ti_beg, old_ti_end;
+  timebin_t old_time_bin;
+
   /* Let's see when this particle started and used to end */
-  const integertime_t old_ti_beg =
-      get_integer_time_begin(e->ti_current, p->time_bin);
-  const integertime_t old_ti_end =
-      get_integer_time_end(e->ti_current, p->time_bin);
+  if (p->wakeup == time_bin_awake) {
+
+    /* Normal case */
+    old_ti_beg = get_integer_time_begin(e->ti_current, p->time_bin);
+    old_ti_end = get_integer_time_end(e->ti_current, p->time_bin);
+    old_time_bin = p->time_bin;
+  } else {
+
+    /* Particle that was limited in the previous step already */
+    old_ti_beg = get_integer_time_begin(e->ti_current, -p->wakeup);
+    old_ti_end = get_integer_time_end(e->ti_current, p->time_bin);
+    old_time_bin = -p->wakeup;
+  }
+
   const integertime_t old_dti = old_ti_end - old_ti_beg;
 
   /* The new fake time-step the particle will be on */
@@ -49,6 +62,11 @@ __attribute__((always_inline)) INLINE static integertime_t timestep_limit_part(
   const integertime_t new_ti_beg = old_ti_beg;
   const integertime_t new_ti_end = e->ti_current + new_fake_ti_step;
   const integertime_t new_dti = new_ti_end - new_ti_beg;
+
+  message(
+      "Limiting p->id=%lld old_ti_beg=%lld old_ti_end=%lld new_ti_beg=%lld "
+      "new_ti_end=%lld",
+      p->id, old_ti_beg, old_ti_end, new_ti_beg, new_ti_end);
 
 #ifdef SWIFT_DEBUG_CHECKS
   /* Some basic safety checks */
@@ -79,7 +97,7 @@ __attribute__((always_inline)) INLINE static integertime_t timestep_limit_part(
   kick_part(p, xp, new_ti_beg, new_ti_beg + new_dti / 2, e->timeBase);
 
   /* Remember the old time-bin */
-  p->wakeup = p->time_bin;
+  p->wakeup = old_time_bin;
 
   /* Update the time bin of this particle */
   p->time_bin = e->min_active_bin;

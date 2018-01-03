@@ -4477,6 +4477,9 @@ void engine_step(struct engine *e) {
   e->timeStep = (e->ti_current - e->ti_old) * e->timeBase;
   e->step_props = engine_step_prop_none;
 
+  message("ti_current=%lld min=%d max=%d", e->ti_current, e->min_active_bin,
+          e->max_active_bin);
+
   /* Prepare the tasks to be launched, rebuild or repartition if needed. */
   engine_prepare(e);
 
