@@ -102,8 +102,7 @@ __attribute__((always_inline)) INLINE static void hydro_velocities_set(
 #ifdef GIZMO_STEER_MOTION
 
     /* Add a correction to the velocity to keep particle positions close enough
-       to
-       the centroid of their mesh-free "cell". */
+       to the centroid of their mesh-free "cell". */
     /* The correction term below is the same one described in Springel (2010).
      */
     float ds[3];

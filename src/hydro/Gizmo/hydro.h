@@ -50,17 +50,7 @@ __attribute__((always_inline)) INLINE static float hydro_compute_timestep(
   return CFL_condition;
 #endif
 
-  /* v_full is the actual velocity of the particle, primitives.v is its
-     hydrodynamical velocity. The time step depends on the relative difference
-     of the two. */
-  float vrel[3];
-  vrel[0] = p->primitives.v[0] - xp->v_full[0];
-  vrel[1] = p->primitives.v[1] - xp->v_full[1];
-  vrel[2] = p->primitives.v[2] - xp->v_full[2];
-  float vmax =
-      sqrtf(vrel[0] * vrel[0] + vrel[1] * vrel[1] + vrel[2] * vrel[2]) +
-      sqrtf(hydro_gamma * p->primitives.P / p->primitives.rho);
-  vmax = max(vmax, p->timestepvars.vmax);
+  const float vmax = p->timestepvars.vmax;
   const float psize = powf(p->geometry.volume / hydro_dimension_unit_sphere,
                            hydro_dimension_inv);
   float dt = FLT_MAX;
@@ -425,8 +415,19 @@ __attribute__((always_inline)) INLINE static void hydro_part_has_no_neighbours(
 __attribute__((always_inline)) INLINE static void hydro_prepare_force(
     struct part* restrict p, struct xpart* restrict xp) {
 
+  /* v_full is the actual velocity of the particle, primitives.v is its
+     hydrodynamical velocity. The time step depends on the relative difference
+     of the two. */
+  float vrel[3];
+  vrel[0] = p->primitives.v[0] - xp->v_full[0];
+  vrel[1] = p->primitives.v[1] - xp->v_full[1];
+  vrel[2] = p->primitives.v[2] - xp->v_full[2];
+  const float vmax =
+      sqrtf(vrel[0] * vrel[0] + vrel[1] * vrel[1] + vrel[2] * vrel[2]) +
+      sqrtf(hydro_gamma * p->primitives.P / p->primitives.rho);
+
   /* Initialize time step criterion variables */
-  p->timestepvars.vmax = 0.;
+  p->timestepvars.vmax = vmax;
 
   /* Set the actual velocity of the particle */
   hydro_velocities_prepare_force(p, xp);
