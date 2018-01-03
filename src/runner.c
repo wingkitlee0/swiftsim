@@ -93,7 +93,9 @@
 
 /* Import the limiter loop functions. */
 #undef FUNCTION
+#undef FUNCTION_NUM
 #define FUNCTION limiter
+#define FUNCTION_NUM LIMITER
 #include "runner_doiact.h"
 
 /* Import the gravity loop functions. */
