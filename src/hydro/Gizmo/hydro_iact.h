@@ -503,7 +503,8 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_limiter(
     float r2, float *dx, float hi, float hj, struct part *pi, struct part *pj) {
 
   /* Wake up the neighbour? */
-  if (pi->timestepvars.vmax > limiter_max_v_sig_ratio * pj->timestepvars.vmax) {
+  if (pi->timestepvars.vmax >
+      const_limiter_max_v_sig_ratio * pj->timestepvars.vmax) {
     pj->wakeup = time_bin_awake;
   }
 }

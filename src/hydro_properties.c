@@ -125,5 +125,7 @@ void hydro_props_print_snapshot(hid_t h_grpsph, const struct hydro_props *p) {
                        pow_dimension(expf(p->log_max_h_change)));
   io_write_attribute_i(h_grpsph, "Max ghost iterations",
                        p->max_smoothing_iterations);
+  io_write_attribute_f(h_grpsph, "Max v_sig ratio (limiter)",
+                       const_limiter_max_v_sig_ratio);
 }
 #endif
