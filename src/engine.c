@@ -4187,8 +4187,7 @@ void engine_skip_force_and_kick(struct engine *e) {
         t->type == task_type_kick1 || t->type == task_type_kick2 ||
         t->type == task_type_timestep ||
         t->type == task_type_timestep_limiter ||
-        t->type == task_type_end_force ||
-        t->subtype == task_subtype_force ||
+        t->type == task_type_end_force || t->subtype == task_subtype_force ||
         t->subtype == task_subtype_limiter || t->subtype == task_subtype_grav ||
         t->type == task_type_grav_long_range ||
         t->type == task_type_grav_ghost_in ||
