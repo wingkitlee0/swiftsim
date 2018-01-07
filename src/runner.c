@@ -1148,8 +1148,6 @@ void runner_do_kick2(struct runner *r, struct cell *c, int timer) {
       struct part *restrict p = &parts[k];
       struct xpart *restrict xp = &xparts[k];
 
-      if (p->id == 415) message("here");
-
       /* If particle needs to be kicked */
       if (part_is_active(p, e)) {
 
@@ -1159,8 +1157,6 @@ void runner_do_kick2(struct runner *r, struct cell *c, int timer) {
         if (p->wakeup == time_bin_awake)
           error("Woken-up particle that has not been processed in kick1");
 #endif
-
-        if (p->id == 415) message("here - active");
 
         if (p->wakeup == time_bin_not_awake) {
 

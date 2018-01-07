@@ -63,11 +63,6 @@ __attribute__((always_inline)) INLINE static integertime_t timestep_limit_part(
   const integertime_t new_ti_end = e->ti_current + new_fake_ti_step;
   const integertime_t new_dti = new_ti_end - new_ti_beg;
 
-  message(
-      "Limiting p->id=%lld old_ti_beg=%lld old_ti_end=%lld new_ti_beg=%lld "
-      "new_ti_end=%lld",
-      p->id, old_ti_beg, old_ti_end, new_ti_beg, new_ti_end);
-
 #ifdef SWIFT_DEBUG_CHECKS
   /* Some basic safety checks */
   if (old_ti_beg >= e->ti_current)

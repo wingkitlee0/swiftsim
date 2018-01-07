@@ -1285,6 +1285,9 @@ void scheduler_reweight(struct scheduler *s, int verbose) {
       case task_type_timestep:
         cost = wscale * t->ci->count + wscale * t->ci->gcount;
         break;
+      case task_type_timestep_limiter:
+        cost = wscale * t->ci->count;
+        break;
       case task_type_send:
         cost = 10 * wscale * t->ci->count * t->ci->count;
         break;
