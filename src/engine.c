@@ -82,19 +82,19 @@ const char *engine_policy_names[] = {"none",
                                      "steal",
                                      "keep",
                                      "block",
-                                     "cpu_tight",
+                                     "cpu tight",
                                      "mpi",
-                                     "numa_affinity",
-                                     "hydro",
-                                     "self_gravity",
-                                     "external_gravity",
-                                     "cosmology_integration",
-                                     "drift_all",
-                                     "reconstruct_mpoles",
+                                     "numa affinity",
+                                     "hydrodynamics",
+                                     "self gravity",
+                                     "external gravity",
+                                     "cosmological integration",
+                                     "drift everything",
+                                     "reconstruct multi-poles",
                                      "cooling",
                                      "sourceterms",
                                      "stars",
-                                     "limiter"};
+                                     "time-step limiter"};
 
 /** The rank of the engine as a global variable (for messages). */
 int engine_rank;
