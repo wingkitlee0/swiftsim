@@ -29,6 +29,35 @@
 #include "timeline.h"
 
 /**
+ * @brief Assign the sum of the accelarations of a #part and #gpart to both
+ * particles.
+ *
+ * @param p The #part.
+ * @param gp The corresponding #gpart.
+ */
+__attribute__((always_inline)) INLINE static void
+kick_synchronize_accelerations(struct part *restrict p,
+                               struct gpart *restrict gp) {
+
+#ifdef SWIFT_DEBUG_CHECKS
+  if (gp != p->gpart) error("Synchronizing un-matched particles.");
+#endif
+
+  /* Get total acceleration */
+  const float a_tot[3] = {p->a_hydro[0] + gp->a_grav[0],
+                          p->a_hydro[1] + gp->a_grav[1],
+                          p->a_hydro[2] + gp->a_grav[2]};
+
+  /* And overwrite the value of both particles */
+  p->a_hydro[0] = a_tot[0];
+  p->a_hydro[1] = a_tot[1];
+  p->a_hydro[2] = a_tot[2];
+  gp->a_grav[0] = a_tot[0];
+  gp->a_grav[1] = a_tot[1];
+  gp->a_grav[2] = a_tot[2];
+}
+
+/**
  * @brief Perform the 'kick' operation on a #gpart
  *
  * @param gp The #gpart to kick.

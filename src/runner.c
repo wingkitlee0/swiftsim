@@ -1030,19 +1030,7 @@ void runner_do_kick1(struct runner *r, struct cell *c, int timer) {
         kick_part(p, xp, ti_begin, ti_begin + ti_step / 2, timeBase);
 
         /* Update the accelerations to be used in the drift for hydro */
-        if (p->gpart != NULL) {
-
-          const float a_tot[3] = {p->a_hydro[0] + p->gpart->a_grav[0],
-                                  p->a_hydro[1] + p->gpart->a_grav[1],
-                                  p->a_hydro[2] + p->gpart->a_grav[2]};
-
-          p->a_hydro[0] = a_tot[0];
-          p->a_hydro[1] = a_tot[1];
-          p->a_hydro[2] = a_tot[2];
-          p->gpart->a_grav[0] = a_tot[0];
-          p->gpart->a_grav[1] = a_tot[1];
-          p->gpart->a_grav[2] = a_tot[2];
-        }
+        if (p->gpart != NULL) kick_synchronize_accelerations(p, p->gpart);
       }
     }
 
