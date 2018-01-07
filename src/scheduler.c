@@ -225,6 +225,14 @@ void scheduler_write_dependencies(struct scheduler *s, int verbose) {
         if (tb->implicit)
           fprintf(f, "\t %s [style = filled];\n\t %s [color = lightgrey];\n",
                   tb_name, tb_name);
+
+        /* Change shape of MPI communications */
+        if (ta->type == task_type_send || ta->type == task_type_recv)
+          fprintf(f, "\t \"%s %s\" [shape = diamond];\n",
+                  taskID_names[ta->type], subtaskID_names[ta->subtype]);
+        if (tb->type == task_type_send || tb->type == task_type_recv)
+          fprintf(f, "\t \"%s %s\" [shape = diamond];\n",
+                  taskID_names[tb->type], subtaskID_names[tb->subtype]);
       }
     }
   }
@@ -235,7 +243,7 @@ void scheduler_write_dependencies(struct scheduler *s, int verbose) {
   int limiter_cluster[4] = {0};
   int gravity_cluster[4] = {0};
 
-  /* Modify the style of some tasks on the plot */
+  /* Check whether we need to construct a group of tasks */
   for (int type = 0; type < task_type_count; ++type) {
 
     for (int subtype = 0; subtype < task_subtype_count; ++subtype) {
@@ -244,11 +252,6 @@ void scheduler_write_dependencies(struct scheduler *s, int verbose) {
 
       /* Does this task/sub-task exist? */
       if (table[ind] != -1) {
-
-        /* Make MPI tasks a different shape */
-        if (type == task_type_send || type == task_type_recv)
-          fprintf(f, "\t \"%s %s\" [shape = diamond];\n", taskID_names[type],
-                  subtaskID_names[subtype]);
 
         for (int k = 0; k < 4; ++k) {
           if (type == task_type_self + k && subtype == task_subtype_density)
@@ -947,12 +950,6 @@ struct task *scheduler_addtask(struct scheduler *s, enum task_types type,
                                enum task_subtypes subtype, int flags,
                                int implicit, struct cell *ci, struct cell *cj) {
 
-#ifdef SWIFT_DEBUG_CHECKS
-  if (ci == NULL && cj != NULL)
-    error("Added a task with ci==NULL and cj!=NULL type=%s/%s",
-          taskID_names[type], subtaskID_names[subtype]);
-#endif
-
   /* Get the next free task. */
   const int ind = atomic_inc(&s->tasks_next);
 
@@ -1275,6 +1272,9 @@ void scheduler_reweight(struct scheduler *s, int verbose) {
         break;
       case task_type_grav_long_range:
         cost = wscale * t->ci->gcount;
+        break;
+      case task_type_end_force:
+        cost = wscale * t->ci->count + wscale * t->ci->gcount;
         break;
       case task_type_kick1:
         cost = wscale * t->ci->count + wscale * t->ci->gcount;

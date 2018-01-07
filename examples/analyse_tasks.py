@@ -53,7 +53,7 @@ infile = args.input
 #  Tasks and subtypes. Indexed as in tasks.h.
 TASKTYPES = ["none", "sort", "self", "pair", "sub_self", "sub_pair",
              "init_grav", "ghost_in", "ghost", "ghost_out", "extra_ghost", "drift_part", "drift_gpart",
-             "kick1", "kick2", "timestep", "timestep_limiter", "send", "recv", "grav_top_level",
+             "end_force", "kick1", "kick2", "timestep", "timestep_limiter", "send", "recv", "grav_top_level",
              "grav_long_range", "grav_ghost_in", "grav_ghost_out", "grav_mm", "grav_down", "cooling",
              "sourceterms", "count"]
 SUBTYPES = ["none", "density", "gradient", "force", "limiter", "grav", "external_grav",

@@ -172,6 +172,7 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
 
   struct scheduler *s = &e->sched;
   const int with_limiter = (e->policy & engine_policy_limiter);
+  const int is_with_cooling = (e->policy & engine_policy_cooling);
 
   /* Are we in a super-cell ? */
   if (c->super == c) {
@@ -190,6 +191,11 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
       c->timestep = scheduler_addtask(s, task_type_timestep, task_subtype_none,
                                       0, 0, c, NULL);
 
+      /* Add the task finishing the force calculation */
+      c->end_force = scheduler_addtask(s, task_type_end_force,
+                                       task_subtype_none, 0, 0, c, NULL);
+
+      if (!is_with_cooling) scheduler_addunlock(s, c->end_force, c->kick2);
       scheduler_addunlock(s, c->kick2, c->timestep);
 
       if (with_limiter) {
@@ -266,6 +272,7 @@ void engine_make_hierarchical_tasks_hydro(struct engine *e, struct cell *c) {
         c->cooling = scheduler_addtask(s, task_type_cooling, task_subtype_none,
                                        0, 0, c, NULL);
 
+        scheduler_addunlock(s, c->super->end_force, c->cooling);
         scheduler_addunlock(s, c->cooling, c->super->kick2);
       }
 
@@ -331,7 +338,7 @@ void engine_make_hierarchical_tasks_gravity(struct engine *e, struct cell *c) {
         if (periodic) scheduler_addunlock(s, c->grav_ghost_out, c->grav_down);
         scheduler_addunlock(s, c->init_grav, c->grav_long_range);
         scheduler_addunlock(s, c->grav_long_range, c->grav_down);
-        scheduler_addunlock(s, c->grav_down, c->super->kick2);
+        scheduler_addunlock(s, c->grav_down, c->super->end_force);
       }
     }
 
@@ -1181,7 +1188,7 @@ void engine_addtasks_send_hydro(struct engine *e, struct cell *ci,
 
 #else
       /* The send_rho task should unlock the super_hydro-cell's kick task. */
-      scheduler_addunlock(s, t_rho, ci->super->kick2);
+      scheduler_addunlock(s, t_rho, ci->super->end_force);
 
       /* The send_rho task depends on the cell's ghost task. */
       scheduler_addunlock(s, ci->super_hydro->ghost_out, t_rho);
@@ -1494,9 +1501,9 @@ void engine_exchange_cells(struct engine *e) {
   }
 
   /* Allocate the pcells. */
-  struct pcell *pcells;
-  if ((pcells = (struct pcell *)malloc(sizeof(struct pcell) * count_out)) ==
-      NULL)
+  struct pcell *pcells = NULL;
+  if (posix_memalign((void **)&pcells, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(struct pcell) * count_out) != 0)
     error("Failed to allocate pcell buffer.");
 
   /* Pack the cells. */
@@ -2060,11 +2067,14 @@ void engine_exchange_proxy_multipoles(struct engine *e) {
   }
 
   /* Allocate the buffers for the packed data */
-  struct gravity_tensors *buffer_send =
-      malloc(sizeof(struct gravity_tensors) * count_send);
-  struct gravity_tensors *buffer_recv =
-      malloc(sizeof(struct gravity_tensors) * count_recv);
-  if (buffer_send == NULL || buffer_recv == NULL)
+  struct gravity_tensors *buffer_send = NULL;
+  if (posix_memalign((void **)&buffer_send, SWIFT_CACHE_ALIGNMENT,
+                     count_send * sizeof(struct gravity_tensors)) != 0)
+    error("Unable to allocate memory for multipole transactions");
+
+  struct gravity_tensors *buffer_recv = NULL;
+  if (posix_memalign((void **)&buffer_recv, SWIFT_CACHE_ALIGNMENT,
+                     count_recv * sizeof(struct gravity_tensors)) != 0)
     error("Unable to allocate memory for multipole transactions");
 
   /* Also allocate the MPI requests */
@@ -2573,7 +2583,7 @@ static inline void engine_make_external_gravity_dependencies(
 
   /* init --> external gravity --> kick */
   scheduler_addunlock(sched, c->super_gravity->drift_gpart, gravity);
-  scheduler_addunlock(sched, gravity, c->super->kick2);
+  scheduler_addunlock(sched, gravity, c->super->end_force);
 }
 
 /**
@@ -2670,8 +2680,7 @@ void engine_link_gravity_tasks(struct engine *e) {
  */
 static inline void engine_make_hydro_loops_dependencies(
     struct scheduler *sched, struct task *density, struct task *gradient,
-    struct task *force, struct task *limiter, struct cell *c, int with_cooling,
-    int with_limiter) {
+    struct task *force, struct cell *c, int with_cooling) {
 
   /* density loop --> ghost --> gradient loop --> extra_ghost */
   /* extra_ghost --> force loop  */
@@ -2792,7 +2801,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       /* Now, build all the dependencies for the hydro */
       engine_make_hydro_loops_dependencies(sched, t, t_force, t_limiter, t->ci,
                                            with_cooling, with_limiter);
-      scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+      scheduler_addunlock(sched, t_force, t->ci->super->end_force);
 #endif
     }
 
@@ -2870,14 +2879,14 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t_force, t_limiter,
                                              t->ci, with_cooling, with_limiter);
-        scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+        scheduler_addunlock(sched, t_force, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
           engine_make_hydro_loops_dependencies(
               sched, t, t_force, t_limiter, t->cj, with_cooling, with_limiter);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t_force, t->cj->super->kick2);
+          scheduler_addunlock(sched, t_force, t->cj->super->end_force);
       }
 
 #endif
@@ -2941,7 +2950,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t_force, t_limiter,
                                              t->ci, with_cooling, with_limiter);
-        scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+        scheduler_addunlock(sched, t_force, t->ci->super->end_force);
       }
 #endif
     }
@@ -3022,14 +3031,14 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t_force, t_limiter,
                                              t->ci, with_cooling, with_limiter);
-        scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+        scheduler_addunlock(sched, t_force, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
           engine_make_hydro_loops_dependencies(
               sched, t, t_force, t_limiter, t->cj, with_cooling, with_limiter);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t_force, t->cj->super->kick2);
+          scheduler_addunlock(sched, t_force, t->cj->super->end_force);
       }
 #endif
     }
@@ -3070,6 +3079,14 @@ void engine_maketasks(struct engine *e) {
 
   /* Split the tasks. */
   scheduler_splittasks(sched);
+
+#ifdef SWIFT_DEBUG_CHECKS
+  /* Verify that we are not left with invalid tasks */
+  for (int i = 0; i < e->sched.nr_tasks; ++i) {
+    const struct task *t = &e->sched.tasks[i];
+    if (t->ci == NULL && t->cj != NULL && !t->skip) error("Invalid task");
+  }
+#endif
 
   /* Free the old list of cell-task links. */
   if (e->links != NULL) free(e->links);
@@ -3524,7 +3541,14 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
       }
     }
 
-    /* Kick/init ? */
+    /* End force ? */
+    else if (t->type == task_type_end_force) {
+
+      if (cell_is_active_hydro(t->ci, e) || cell_is_active_gravity(t->ci, e))
+        scheduler_activate(s, t);
+    }
+
+    /* Kick ? */
     else if (t->type == task_type_kick1 || t->type == task_type_kick2) {
 
       if (cell_is_active_hydro(t->ci, e) || cell_is_active_gravity(t->ci, e))
@@ -3666,7 +3690,7 @@ int engine_estimate_nr_tasks(struct engine *e) {
   int n1 = 0;
   int n2 = 0;
   if (e->policy & engine_policy_hydro) {
-    n1 += 36;
+    n1 += 37;
     n2 += 2;
 #ifdef WITH_MPI
     n1 += 6;
@@ -4163,6 +4187,7 @@ void engine_skip_force_and_kick(struct engine *e) {
         t->type == task_type_kick1 || t->type == task_type_kick2 ||
         t->type == task_type_timestep ||
         t->type == task_type_timestep_limiter ||
+        t->type == task_type_end_force ||
         t->subtype == task_subtype_force ||
         t->subtype == task_subtype_limiter || t->subtype == task_subtype_grav ||
         t->type == task_type_grav_long_range ||
@@ -5032,8 +5057,10 @@ void engine_split(struct engine *e, struct partition *initial_partition) {
       posix_memalign((void **)&xparts_new, xpart_align,
                      sizeof(struct xpart) * s->size_parts) != 0)
     error("Failed to allocate new part data.");
-  memcpy(parts_new, s->parts, sizeof(struct part) * s->nr_parts);
-  memcpy(xparts_new, s->xparts, sizeof(struct xpart) * s->nr_parts);
+  if (s->nr_parts > 0) {
+    memcpy(parts_new, s->parts, sizeof(struct part) * s->nr_parts);
+    memcpy(xparts_new, s->xparts, sizeof(struct xpart) * s->nr_parts);
+  }
   free(s->parts);
   free(s->xparts);
   s->parts = parts_new;
@@ -5052,7 +5079,8 @@ void engine_split(struct engine *e, struct partition *initial_partition) {
   if (posix_memalign((void **)&sparts_new, spart_align,
                      sizeof(struct spart) * s->size_sparts) != 0)
     error("Failed to allocate new spart data.");
-  memcpy(sparts_new, s->sparts, sizeof(struct spart) * s->nr_sparts);
+  if (s->nr_sparts > 0)
+    memcpy(sparts_new, s->sparts, sizeof(struct spart) * s->nr_sparts);
   free(s->sparts);
   s->sparts = sparts_new;
 
@@ -5069,7 +5097,8 @@ void engine_split(struct engine *e, struct partition *initial_partition) {
   if (posix_memalign((void **)&gparts_new, gpart_align,
                      sizeof(struct gpart) * s->size_gparts) != 0)
     error("Failed to allocate new gpart data.");
-  memcpy(gparts_new, s->gparts, sizeof(struct gpart) * s->nr_gparts);
+  if (s->nr_gparts > 0)
+    memcpy(gparts_new, s->gparts, sizeof(struct gpart) * s->nr_gparts);
   free(s->gparts);
   s->gparts = gparts_new;
 
@@ -5592,8 +5621,8 @@ void engine_init(struct engine *e, struct space *s,
       parser_get_opt_param_int(params, "Scheduler:mpi_message_limit", 4) * 1024;
 
   /* Allocate and init the threads. */
-  if ((e->runners = (struct runner *)malloc(sizeof(struct runner) *
-                                            e->nr_threads)) == NULL)
+  if (posix_memalign((void **)&e->runners, SWIFT_CACHE_ALIGNMENT,
+                     e->nr_threads * sizeof(struct runner)) != 0)
     error("Failed to allocate threads array.");
   for (int k = 0; k < e->nr_threads; k++) {
     e->runners[k].id = k;
