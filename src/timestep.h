@@ -145,8 +145,6 @@ __attribute__((always_inline)) INLINE static integertime_t get_part_timestep(
   const integertime_t new_dti = make_integer_timestep(
       new_dt, p->time_bin, e->ti_current, e->timeBase_inv);
 
-  if (new_dti == 2048) message("p->id=%lld gets low time-step", p->id);
-
   return new_dti;
 }
 
