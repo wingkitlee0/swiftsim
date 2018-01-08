@@ -2781,7 +2781,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       engine_make_hydro_loops_dependencies(sched, t, t_gradient, t_force,
                                            t_limiter, t->ci, with_cooling,
                                            with_limiter);
-      scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+      scheduler_addunlock(sched, t_force, t->ci->super->end_force);
 #else
 
       /* Start by constructing the task for the second hydro loop */
@@ -2845,7 +2845,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
         engine_make_hydro_loops_dependencies(sched, t, t_gradient, t_force,
                                              t_limiter, t->ci, with_cooling,
                                              with_limiter);
-        scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+        scheduler_addunlock(sched, t_force, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
@@ -2853,7 +2853,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
                                                t_limiter, t->cj, with_cooling,
                                                with_limiter);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t_force, t->cj->super->kick2);
+          scheduler_addunlock(sched, t_force, t->cj->super->end_force);
       }
 
 #else
@@ -2927,7 +2927,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
         engine_make_hydro_loops_dependencies(sched, t, t_gradient, t_force,
                                              t_limiter, t->ci, with_cooling,
                                              with_limiter);
-        scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+        scheduler_addunlock(sched, t_force, t->ci->super->end_force);
       }
 
 #else
@@ -2998,7 +2998,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
         engine_make_hydro_loops_dependencies(sched, t, t_gradient, t_force,
                                              t_limiter, t->ci, with_cooling,
                                              with_limiter);
-        scheduler_addunlock(sched, t_force, t->ci->super->kick2);
+        scheduler_addunlock(sched, t_force, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
@@ -3006,7 +3006,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
                                                t_limiter, t->cj, with_cooling,
                                                with_limiter);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t_force, t->cj->super->kick2);
+          scheduler_addunlock(sched, t_force, t->cj->super->end_force);
       }
 
 #else
