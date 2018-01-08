@@ -2680,7 +2680,8 @@ void engine_link_gravity_tasks(struct engine *e) {
  */
 static inline void engine_make_hydro_loops_dependencies(
     struct scheduler *sched, struct task *density, struct task *gradient,
-    struct task *force, struct cell *c, int with_cooling) {
+    struct task *force, struct task *limiter, struct cell *c, int with_cooling,
+    int with_limiter) {
 
   /* density loop --> ghost --> gradient loop --> extra_ghost */
   /* extra_ghost --> force loop  */

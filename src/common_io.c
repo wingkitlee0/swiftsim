@@ -408,6 +408,7 @@ void io_write_code_description(hid_t h_file) {
 /**
  * @brief Write the #engine policy to the file.
  * @param h_file File to write to.
+ * @param e The #engine to read the policy from.
  */
 void io_write_engine_policy(hid_t h_file, const struct engine* e) {
 
