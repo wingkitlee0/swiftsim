@@ -1544,6 +1544,8 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
 
   integertime_t ti_hydro_end_min = max_nr_timesteps, ti_hydro_end_max = 0,
                 ti_hydro_beg_max = 0;
+  integertime_t ti_gravity_end_min = max_nr_timesteps, ti_gravity_end_max = 0,
+                ti_gravity_beg_max = 0;
 
   /* Limit irrespective of cell flags? */
   force |= c->do_limiter;
@@ -1561,6 +1563,9 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
         ti_hydro_end_min = min(cp->ti_hydro_end_min, ti_hydro_end_min);
         ti_hydro_end_max = max(cp->ti_hydro_end_max, ti_hydro_end_max);
         ti_hydro_beg_max = max(cp->ti_hydro_beg_max, ti_hydro_beg_max);
+        ti_gravity_end_min = min(cp->ti_gravity_end_min, ti_gravity_end_min);
+        ti_gravity_end_max = max(cp->ti_gravity_end_max, ti_gravity_end_max);
+        ti_gravity_beg_max = max(cp->ti_gravity_beg_max, ti_gravity_beg_max);
       }
     }
 
@@ -1568,12 +1573,18 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
     c->ti_hydro_end_min = min(c->ti_hydro_end_min, ti_hydro_end_min);
     c->ti_hydro_end_max = max(c->ti_hydro_end_max, ti_hydro_end_max);
     c->ti_hydro_beg_max = max(c->ti_hydro_beg_max, ti_hydro_beg_max);
+    c->ti_gravity_end_min = min(c->ti_gravity_end_min, ti_gravity_end_min);
+    c->ti_gravity_end_max = max(c->ti_gravity_end_max, ti_gravity_end_max);
+    c->ti_gravity_beg_max = max(c->ti_gravity_beg_max, ti_gravity_beg_max);
 
   } else if (!c->split && force) {
 
     ti_hydro_end_min = c->ti_hydro_end_min;
     ti_hydro_end_max = c->ti_hydro_end_max;
     ti_hydro_beg_max = c->ti_hydro_beg_max;
+    ti_gravity_end_min = c->ti_gravity_end_min;
+    ti_gravity_end_max = c->ti_gravity_end_max;
+    ti_gravity_beg_max = c->ti_gravity_beg_max;
 
     /* Loop over the gas particles in this cell. */
     for (int k = 0; k < count; k++) {
@@ -1598,6 +1609,22 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
 
         /* What is the next starting point for this cell ? */
         ti_hydro_beg_max = max(ti_current, ti_hydro_beg_max);
+
+        /* Also limit the gpart counter-part */
+        if (p->gpart != NULL) {
+
+	  /* Register the time-bin */
+          p->gpart->time_bin = p->time_bin;
+
+          /* What is the next sync-point ? */
+          ti_gravity_end_min =
+              min(ti_current + ti_new_step, ti_gravity_end_min);
+          ti_gravity_end_max =
+              max(ti_current + ti_new_step, ti_gravity_end_max);
+
+          /* What is the next starting point for this cell ? */
+          ti_gravity_beg_max = max(ti_current, ti_gravity_beg_max);
+        }
       }
     }
 
@@ -1605,6 +1632,9 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
     c->ti_hydro_end_min = min(c->ti_hydro_end_min, ti_hydro_end_min);
     c->ti_hydro_end_max = max(c->ti_hydro_end_max, ti_hydro_end_max);
     c->ti_hydro_beg_max = max(c->ti_hydro_beg_max, ti_hydro_beg_max);
+    c->ti_gravity_end_min = min(c->ti_gravity_end_min, ti_gravity_end_min);
+    c->ti_gravity_end_max = max(c->ti_gravity_end_max, ti_gravity_end_max);
+    c->ti_gravity_beg_max = max(c->ti_gravity_beg_max, ti_gravity_beg_max);
   }
 
   /* Clear the limiter flags. */
