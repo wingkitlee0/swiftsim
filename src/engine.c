@@ -1162,12 +1162,12 @@ void engine_addtasks_send_hydro(struct engine *e, struct cell *ci,
     if (t_xv == NULL) {
 
       t_xv = scheduler_addtask(s, task_type_send, task_subtype_xv,
-                               6 * ci->tag + 0, 0, ci, cj);
+                               task_comms_count * ci->tag + task_comms_xv, 0, ci, cj);
       t_rho = scheduler_addtask(s, task_type_send, task_subtype_rho,
-                                6 * ci->tag + 1, 0, ci, cj);
+                                task_comms_count * ci->tag + task_comms_rho, 0, ci, cj);
 #ifdef EXTRA_HYDRO_LOOP
       t_gradient = scheduler_addtask(s, task_type_send, task_subtype_gradient,
-                                     6 * ci->tag + 3, 0, ci, cj);
+                                     task_comms_count * ci->tag + task_comms_gradient, 0, ci, cj);
 #endif
 
 #ifdef EXTRA_HYDRO_LOOP
@@ -1251,7 +1251,7 @@ void engine_addtasks_send_gravity(struct engine *e, struct cell *ci,
     if (t_grav == NULL) {
 
       t_grav = scheduler_addtask(s, task_type_send, task_subtype_gpart,
-                                 6 * ci->tag + 4, 0, ci, cj);
+                                 task_comms_count * ci->tag + task_comms_gpart, 0, ci, cj);
 
       /* The sends should unlock the down pass. */
       scheduler_addunlock(s, t_grav, ci->super_gravity->grav_down);
@@ -1311,7 +1311,7 @@ void engine_addtasks_send_timestep(struct engine *e, struct cell *ci,
     if (t_ti == NULL) {
 
       t_ti = scheduler_addtask(s, task_type_send, task_subtype_tend,
-                               6 * ci->tag + 2, 0, ci, cj);
+                               task_comms_count * ci->tag + task_comms_timestep, 0, ci, cj);
 
       /* The super-cell's timestep task should unlock the send_ti task. */
       scheduler_addunlock(s, ci->super->timestep, t_ti);
@@ -1352,13 +1352,13 @@ void engine_addtasks_recv_hydro(struct engine *e, struct cell *c,
   if (t_xv == NULL && c->density != NULL) {
 
     /* Create the tasks. */
-    t_xv = scheduler_addtask(s, task_type_recv, task_subtype_xv, 6 * c->tag + 0,
+    t_xv = scheduler_addtask(s, task_type_recv, task_subtype_xv, task_comms_count * c->tag + task_comms_xv,
                              0, c, NULL);
     t_rho = scheduler_addtask(s, task_type_recv, task_subtype_rho,
-                              6 * c->tag + 1, 0, c, NULL);
+                              task_comms_count * c->tag + task_comms_rho, 0, c, NULL);
 #ifdef EXTRA_HYDRO_LOOP
     t_gradient = scheduler_addtask(s, task_type_recv, task_subtype_gradient,
-                                   6 * c->tag + 3, 0, c, NULL);
+                                   task_comms_count * c->tag + task_comms_gradient, 0, c, NULL);
 #endif
   }
 
@@ -1414,7 +1414,7 @@ void engine_addtasks_recv_gravity(struct engine *e, struct cell *c,
 
     /* Create the tasks. */
     t_grav = scheduler_addtask(s, task_type_recv, task_subtype_gpart,
-                               6 * c->tag + 4, 0, c, NULL);
+                               task_comms_count * c->tag + task_comms_gpart, 0, c, NULL);
   }
 
   c->recv_grav = t_grav;
@@ -1450,7 +1450,7 @@ void engine_addtasks_recv_timestep(struct engine *e, struct cell *c,
   if (t_ti == NULL && (c->grav != NULL || c->density != NULL)) {
 
     t_ti = scheduler_addtask(s, task_type_recv, task_subtype_tend,
-                             6 * c->tag + 2, 0, c, NULL);
+                             task_comms_count * c->tag + task_comms_timestep, 0, c, NULL);
   }
 
   c->recv_ti = t_ti;

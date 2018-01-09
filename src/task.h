@@ -71,7 +71,7 @@ enum task_types {
 } __attribute__((packed));
 
 /**
- * @brief The different task sub-types (for pairs, selfs and sub-tasks).
+ * @brief The different task sub-types (for pairs, selfs, sub-tasks and MPI).
  */
 enum task_subtypes {
   task_subtype_none = 0,
@@ -89,6 +89,18 @@ enum task_subtypes {
   task_subtype_spart,
   task_subtype_count
 } __attribute__((packed));
+
+/**
+ * @brief The different MPI communications (for accounting of tags).
+ */
+enum task_comms {
+  task_comms_timestep = 0,
+  task_comms_gpart,
+  task_comms_xv,
+  task_comms_rho,
+  task_comms_gradient,
+  task_comms_count
+};
 
 /**
  * @brief The type of particles/objects this task acts upon in a given cell.
