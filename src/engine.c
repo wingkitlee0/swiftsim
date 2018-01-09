@@ -172,7 +172,6 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
 
   struct scheduler *s = &e->sched;
   const int with_limiter = (e->policy & engine_policy_limiter);
-  const int is_with_cooling = (e->policy & engine_policy_cooling);
 
   /* Are we in a super-cell ? */
   if (c->super == c) {
@@ -195,9 +194,8 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
       c->end_force = scheduler_addtask(s, task_type_end_force,
                                        task_subtype_none, 0, 0, c, NULL);
 
-      if (!is_with_cooling) scheduler_addunlock(s, c->end_force, c->kick2);
-
       /* Normal time-stepping */
+      scheduler_addunlock(s, c->end_force, c->kick2);
       scheduler_addunlock(s, c->kick2, c->timestep);
       scheduler_addunlock(s, c->timestep, c->kick1);
 
