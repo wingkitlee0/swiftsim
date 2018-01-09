@@ -1284,7 +1284,7 @@ void engine_addtasks_send_gravity(struct engine *e, struct cell *ci,
  * @param t_ti The send_ti #task, if it has already been created.
  */
 void engine_addtasks_send_timestep(struct engine *e, struct cell *ci,
-                                   struct cell *cj, struct task *t_ti) {
+                                   struct cell *cj, struct task *t_ti, struct task *t_limiter, int with_limiter) {
 
 #ifdef WITH_MPI
   struct link *l = NULL;
@@ -1313,19 +1313,28 @@ void engine_addtasks_send_timestep(struct engine *e, struct cell *ci,
       t_ti = scheduler_addtask(s, task_type_send, task_subtype_tend,
                                task_comms_count * ci->tag + task_comms_timestep, 0, ci, cj);
 
+      if(with_limiter)
+	t_limiter = scheduler_addtask(s, task_type_send, task_subtype_limiter,
+				      task_comms_count * ci->tag + task_comms_limiter, 0, ci, cj);
+      
       /* The super-cell's timestep task should unlock the send_ti task. */
       scheduler_addunlock(s, ci->super->timestep, t_ti);
+      if(with_limiter) scheduler_addunlock(s, t_limiter, ci->super->timestep);
+      if(with_limiter) scheduler_addunlock(s, t_limiter, ci->super->timestep_limiter);
+      if(with_limiter) scheduler_addunlock(s, ci->super->kick2, t_limiter);
+      if(with_limiter) scheduler_addunlock(s, ci->super->timestep_limiter, t_ti);
     }
 
     /* Add them to the local cell. */
     engine_addlink(e, &ci->send_ti, t_ti);
+    if(with_limiter) engine_addlink(e, &ci->send_limiter, t_limiter);
   }
 
   /* Recurse? */
   if (ci->split)
     for (int k = 0; k < 8; k++)
       if (ci->progeny[k] != NULL)
-        engine_addtasks_send_timestep(e, ci->progeny[k], cj, t_ti);
+        engine_addtasks_send_timestep(e, ci->progeny[k], cj, t_ti, t_limiter, with_limiter);
 
 #else
   error("SWIFT was not compiled with MPI support.");
@@ -1441,7 +1450,7 @@ void engine_addtasks_recv_gravity(struct engine *e, struct cell *c,
  * @param t_ti The recv_ti #task, if already been created.
  */
 void engine_addtasks_recv_timestep(struct engine *e, struct cell *c,
-                                   struct task *t_ti) {
+                                   struct task *t_ti, struct task *t_limiter, int with_limiter) {
 
 #ifdef WITH_MPI
   struct scheduler *s = &e->sched;
@@ -1451,21 +1460,38 @@ void engine_addtasks_recv_timestep(struct engine *e, struct cell *c,
 
     t_ti = scheduler_addtask(s, task_type_recv, task_subtype_tend,
                              task_comms_count * c->tag + task_comms_timestep, 0, c, NULL);
+
+    if(with_limiter)
+      t_limiter = scheduler_addtask(s, task_type_recv, task_subtype_limiter,
+				    task_comms_count * c->tag + task_comms_limiter, 0, c, NULL);
   }
 
   c->recv_ti = t_ti;
+  c->recv_limiter = t_limiter;
 
   for (struct link *l = c->grav; l != NULL; l = l->next)
     scheduler_addunlock(s, l->t, t_ti);
 
-  for (struct link *l = c->force; l != NULL; l = l->next)
-    scheduler_addunlock(s, l->t, t_ti);
+  if(with_limiter) {
+    
+    for (struct link *l = c->force; l != NULL; l = l->next)
+      scheduler_addunlock(s, l->t, t_limiter);
+    
+    for (struct link *l = c->limiter; l != NULL; l = l->next) {
+      scheduler_addunlock(s, t_limiter, l->t);
+      scheduler_addunlock(s, l->t, t_ti);
+    }
+  } else {
+    
+    for (struct link *l = c->force; l != NULL; l = l->next)
+      scheduler_addunlock(s, l->t, t_ti);
+  }
 
   /* Recurse? */
   if (c->split)
     for (int k = 0; k < 8; k++)
       if (c->progeny[k] != NULL)
-        engine_addtasks_recv_timestep(e, c->progeny[k], t_ti);
+        engine_addtasks_recv_timestep(e, c->progeny[k], t_ti, t_limiter, with_limiter);
 
 #else
   error("SWIFT was not compiled with MPI support.");
@@ -3151,17 +3177,23 @@ void engine_maketasks(struct engine *e) {
   /* Add the communication tasks if MPI is being used. */
   if (e->policy & engine_policy_mpi) {
 
+    const int with_limiter = (e->policy & engine_policy_limiter);
+    
     /* Loop over the proxies. */
     for (int pid = 0; pid < e->nr_proxies; pid++) {
 
       /* Get a handle on the proxy. */
       struct proxy *p = &e->proxies[pid];
-
+      
+      /* Loop through the proxy's incoming cells and add the
+         recv tasks for the cells in the proxy that have a connection. */
       for (int k = 0; k < p->nr_cells_in; k++)
-        engine_addtasks_recv_timestep(e, p->cells_in[k], NULL);
+        engine_addtasks_recv_timestep(e, p->cells_in[k], NULL, NULL, with_limiter);
 
+      /* Loop through the proxy's incoming cells and add the
+         recv tasks for the cells in the proxy that have a connection. */
       for (int k = 0; k < p->nr_cells_out; k++)
-        engine_addtasks_send_timestep(e, p->cells_out[k], p->cells_in[0], NULL);
+        engine_addtasks_send_timestep(e, p->cells_out[k], p->cells_in[0], NULL, NULL, with_limiter);
 
       /* Loop through the proxy's incoming cells and add the
          recv tasks for the cells in the proxy that have a hydro connection. */
@@ -3171,8 +3203,7 @@ void engine_maketasks(struct engine *e) {
             engine_addtasks_recv_hydro(e, p->cells_in[k], NULL, NULL, NULL);
 
       /* Loop through the proxy's incoming cells and add the
-         recv tasks for the cells in the proxy that have a gravity connection.
-         */
+         recv tasks for the cells in the proxy that have a gravity connection. */
       if (e->policy & engine_policy_self_gravity)
         for (int k = 0; k < p->nr_cells_in; k++)
           if (p->cells_in_type[k] & proxy_cell_type_gravity)
@@ -3409,8 +3440,11 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
           }
 
           /* If the foreign cell is active, we want its ti_end values. */
-          if (ci_active_hydro) scheduler_activate(s, ci->recv_ti);
+          if (ci_active_hydro || with_limiter) scheduler_activate(s, ci->recv_ti);
 
+	  if (with_limiter) scheduler_activate(s, ci->recv_limiter);
+	  if (with_limiter) scheduler_activate_send(s, cj->send_limiter, ci->nodeID);
+	  	  
           /* Is the foreign cell active and will need stuff from us? */
           if (ci_active_hydro) {
 
@@ -3421,7 +3455,8 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
                sent, i.e. drift the cell specified in the send task (l->t)
                itself. */
             cell_activate_drift_part(l->t->ci, s);
-
+	    if(with_limiter) cell_activate_limiter(l->t->ci, s);
+	    
             /* If the local cell is also active, more stuff will be needed. */
             if (cj_active_hydro) {
               scheduler_activate_send(s, cj->send_rho, ci->nodeID);
@@ -3433,7 +3468,7 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
           }
 
           /* If the local cell is active, send its ti_end values. */
-          if (cj_active_hydro)
+          if (cj_active_hydro || with_limiter)
             scheduler_activate_send(s, cj->send_ti, ci->nodeID);
 
         } else if (cj->nodeID != nodeID) {
@@ -3450,8 +3485,11 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
           }
 
           /* If the foreign cell is active, we want its ti_end values. */
-          if (cj_active_hydro) scheduler_activate(s, cj->recv_ti);
+          if (cj_active_hydro || with_limiter) scheduler_activate(s, cj->recv_ti);
 
+	  if (with_limiter) scheduler_activate(s, cj->recv_limiter);
+	  if (with_limiter) scheduler_activate_send(s, ci->send_limiter, cj->nodeID);
+	  
           /* Is the foreign cell active and will need stuff from us? */
           if (cj_active_hydro) {
 
@@ -3462,7 +3500,8 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
                sent, i.e. drift the cell specified in the send task (l->t)
                itself. */
             cell_activate_drift_part(l->t->ci, s);
-
+	    if(with_limiter) cell_activate_limiter(l->t->ci, s);
+	    
             /* If the local cell is also active, more stuff will be needed. */
             if (ci_active_hydro) {
 
@@ -3475,7 +3514,7 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
           }
 
           /* If the local cell is active, send its ti_end values. */
-          if (ci_active_hydro)
+          if (ci_active_hydro || with_limiter)
             scheduler_activate_send(s, ci->send_ti, cj->nodeID);
         }
 #endif

@@ -99,6 +99,7 @@ enum task_comms {
   task_comms_xv,
   task_comms_rho,
   task_comms_gradient,
+  task_comms_limiter,
   task_comms_count
 };
 
