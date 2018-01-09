@@ -1612,7 +1612,7 @@ void runner_do_limiter(struct runner *r, struct cell *c, int force, int timer) {
         /* Also limit the gpart counter-part */
         if (p->gpart != NULL) {
 
-	  /* Register the time-bin */
+          /* Register the time-bin */
           p->gpart->time_bin = p->time_bin;
 
           /* What is the next sync-point ? */

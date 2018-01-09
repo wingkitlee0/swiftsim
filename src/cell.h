@@ -292,7 +292,7 @@ struct cell {
 
   /* Task receiving time-step limiter data. */
   struct task *recv_limiter;
-  
+
   /* Task receiving data (time-step). */
   struct task *recv_ti;
 
@@ -310,7 +310,7 @@ struct cell {
 
   /* Linked list for sending time-step limiter data. */
   struct link *send_limiter;
-  
+
   /* Linked list for sending data (time-step). */
   struct link *send_ti;
 

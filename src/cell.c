@@ -2069,10 +2069,11 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
         /* If the foreign cell is active, we want its ti_end values. */
         if (ci_active || with_limiter) scheduler_activate(s, ci->recv_ti);
 
-	if (with_limiter) scheduler_activate(s, ci->recv_limiter);
-	if (with_limiter) scheduler_activate_send(s, cj->send_limiter, ci->nodeID);
-	
-	/* Is the foreign cell active and will need stuff from us? */
+        if (with_limiter) scheduler_activate(s, ci->recv_limiter);
+        if (with_limiter)
+          scheduler_activate_send(s, cj->send_limiter, ci->nodeID);
+
+        /* Is the foreign cell active and will need stuff from us? */
         if (ci_active) {
 
           scheduler_activate_send(s, cj->send_xv, ci->nodeID);
@@ -2080,8 +2081,8 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
           /* Drift the cell which will be sent; note that not all sent
              particles will be drifted, only those that are needed. */
           cell_activate_drift_part(cj, s);
-	  if(with_limiter) cell_activate_limiter(cj, s);
-	  
+          if (with_limiter) cell_activate_limiter(cj, s);
+
           /* If the local cell is also active, more stuff will be needed. */
           if (cj_active) {
             scheduler_activate_send(s, cj->send_rho, ci->nodeID);
@@ -2093,7 +2094,8 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
         }
 
         /* If the local cell is active, send its ti_end values. */
-        if (cj_active || with_limiter) scheduler_activate_send(s, cj->send_ti, ci->nodeID);
+        if (cj_active || with_limiter)
+          scheduler_activate_send(s, cj->send_ti, ci->nodeID);
 
       } else if (cj->nodeID != nodeID) {
 
@@ -2112,8 +2114,9 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
         /* If the foreign cell is active, we want its ti_end values. */
         if (cj_active || with_limiter) scheduler_activate(s, cj->recv_ti);
 
-	if (with_limiter) scheduler_activate(s, cj->recv_limiter);
-	if (with_limiter) scheduler_activate_send(s, ci->send_limiter, cj->nodeID);
+        if (with_limiter) scheduler_activate(s, cj->recv_limiter);
+        if (with_limiter)
+          scheduler_activate_send(s, ci->send_limiter, cj->nodeID);
 
         /* Is the foreign cell active and will need stuff from us? */
         if (cj_active) {
@@ -2123,8 +2126,8 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
           /* Drift the cell which will be sent; note that not all sent
              particles will be drifted, only those that are needed. */
           cell_activate_drift_part(ci, s);
-	  if(with_limiter) cell_activate_limiter(ci, s);
-	  
+          if (with_limiter) cell_activate_limiter(ci, s);
+
           /* If the local cell is also active, more stuff will be needed. */
           if (ci_active) {
 
@@ -2137,7 +2140,8 @@ int cell_unskip_hydro_tasks(struct cell *c, struct scheduler *s) {
         }
 
         /* If the local cell is active, send its ti_end values. */
-        if (ci_active || with_limiter) scheduler_activate_send(s, ci->send_ti, cj->nodeID);
+        if (ci_active || with_limiter)
+          scheduler_activate_send(s, ci->send_ti, cj->nodeID);
       }
 #endif
     }
