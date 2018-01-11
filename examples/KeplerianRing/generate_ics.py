@@ -26,6 +26,8 @@ import numpy as np
 import write_gadget as wg
 import h5py as h5
 
+from scipy.special import erfinv
+
 
 class Particles(object):
     """
@@ -483,7 +485,6 @@ def gen_particles_spiral(meta):
     centre_of_ring = (meta["boxsize"]/2., meta["boxsize"]/2., meta["boxsize"]/2.)
     max_r = meta["boxsize"]/2.
 
-
     m = (np.arange(particles.nparts) + 0.5)/particles.nparts
     r = max_r * m
     theta = generate_theta(r)
@@ -498,9 +499,52 @@ def gen_particles_spiral(meta):
 
     particles.exclude_particles((particles.softening, 100.))
     
+    # This way of doing densities does not work for different sized patches.
     particles.densities = sigma(particles.radii)
     particles.calculate_velocities()
     particles.calculate_masses()
+
+    particles.generate_ids()
+
+    if meta["angle"]:
+        particles.tilt_particles(meta["angle"], centre_of_ring)
+
+
+    return particles
+
+
+def gen_particles_gaussian(meta):
+    """
+    Generates particles on concentric circles and returns a filled Particles
+    object. Based on Cartwright, Stamatellos & Whitworth (2009).
+
+    This generation function uses a Gaussian PDF.
+    """
+    particles = Particles(meta)
+    centre_of_ring = (meta["boxsize"]/2., meta["boxsize"]/2., meta["boxsize"]/2.)
+    max_r = meta["boxsize"]/2.
+
+    m = (np.arange(particles.nparts) + 0.5)/particles.nparts
+    error_function = erfinv(2*m - 1)
+    r = 2 + 0.5 * error_function
+
+    print(max(r), min(r))
+    theta = generate_theta(r)
+
+    particles.radii, particles.theta = QSP_fix(r, theta)
+    # We must do this afterwards as QSP does not always return the same number of parts.
+    phi = np.zeros_like(particles.theta) + np.pi/2
+    particles.phi = phi
+
+    particles.convert_polar_to_cartesian(centre_of_ring, meta["boxsize"])
+    particles.nparts = len(particles.radii)
+
+    particles.exclude_particles((particles.softening, 100.))
+    
+    # This way of doing densities does not work for different sized patches.
+    particles.densities = np.zeros_like(particles.radii)
+    particles.calculate_velocities()
+    particles.masses = np.ones_like(particles.radii)
 
     particles.generate_ids()
 
@@ -606,8 +650,8 @@ if __name__ == "__main__":
         "-g",
         "--generationmethod",
         help="""
-             Generation method for the particles. Choose between grid and
-             spiral, where spiral ensures that the particles are generated
+             Generation method for the particles. Choose between grid, spiral,
+             and gaussian, where spiral ensures that the particles are generated
              in a way that minimises the energy in SPH. For more details on
              this method see Cartwright, Stamatellos & Whitworth (2009).
              Default: grid.
@@ -648,6 +692,8 @@ if __name__ == "__main__":
         gen_particles = gen_particles_grid
     elif ARGS["generationmethod"] == "spiral":
         gen_particles = gen_particles_spiral
+    elif ARGS["generationmethod"] == "gaussian":
+        gen_particles = gen_particles_gaussian
     else:
         print(
             "ERROR: {} is an invalid generation method. Exiting.".format(
