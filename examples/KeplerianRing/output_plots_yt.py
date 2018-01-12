@@ -143,7 +143,24 @@ def get_density_r(snapshot, filename="keplerian_ring", binrange=(0, 5), binnumbe
     return bin_density_r(*data, binrange, binnumber)
 
 
-def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50):
+def get_mass_outside_inside(snap, radius=2, filename="keplerian_ring"):
+    """
+    Finds the mass outside and inside a radius. This is used to look at mass
+    flow inside and outside of the ring with a postprocessing routine in
+    get_derived_data.
+    """
+    snap = "{:04d}".format(snapshot)
+    filename = f"{filename}_{snap}.hdf5"
+
+    radii, masses = load_data(filename)
+
+    below = sum(masses[radii < radius])
+    above = sum(masses[radii > radius])
+
+    return inside, outside
+
+
+def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50, radius=2):
     """
     Gets the derived data from our snapshots, i.e. the
     density(r) profile and the chi squared (based on the
@@ -158,6 +175,18 @@ def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50):
     ]
     densities = [initial[1]] + other_densities
 
+    masses_inside_outside = [
+        get_mass_outside_inside(snap, radius=radius, filename=filename) for snap in tqdm(
+            range(minsnap, maxsnap+1), desc="Mass Flow"
+        )
+    ]
+    mass_flows = [
+        y[0] - x[0] for x, y in zip(
+            masses_inside_outside[1:],
+            masses_inside_outside[:-1]
+        )
+    ]
+
     chisq = [
         chi_square(
             dens[int(0.1*binnumber):int(0.4*binnumber)],
@@ -165,12 +194,12 @@ def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50):
         ) for dens in tqdm(densities, desc="Chi Squared")
     ]
 
-    return initial[0], densities, chisq
+    return initial[0], densities, chisq, mass_flows
 
 
 def plot_chisq(ax, minsnap, maxsnap, chisq, filename="keplerian_ring"):
     """
-    Plot the chisq(snapshot).
+    Plot the chisq(rotation).
     """
     snapshots = np.arange(minsnap, maxsnap + 1)
     rotations = [convert_snapshot_number_to_rotations_at(1, snap, filename) for snap in snapshots]
@@ -178,6 +207,20 @@ def plot_chisq(ax, minsnap, maxsnap, chisq, filename="keplerian_ring"):
 
     ax.set_xlabel("Number of rotations")
     ax.set_ylabel("$\chi^2 / \chi^2_{{max}}$ = {:3.5f}".format(max(chisq)))
+
+    return
+
+
+def plot_mass_flow(ax, minsnap, maxsnap, mass_flow, filename="keplerian_ring"):
+    """
+    Plot the mass_flow(rotation).
+    """
+    snapshots = np.arange(minsnap, maxsnap + 1)
+    rotations = [convert_snapshot_number_to_rotations_at(1, snap, filename) for snap in snapshots]
+    ax.plot(rotations, mass_flow)
+
+    ax.set_xlabel("Number of rotations")
+    ax.set_ylabel("Mass flow out of ring")
 
     return
 
@@ -397,6 +440,18 @@ if __name__ == "__main__":
         required=False
     )
 
+    parser.add_argument(
+        "-p",
+        "--plotmassflow",
+        help="""
+             Plot the mass flow instead of several density(r) plots.
+             Set this to a nonzero number to do this plot.
+             Default: 0.
+             """,
+        default=0,
+        required=False
+    )
+
     args = vars(parser.parse_args())
 
     filename = "keplerian_ring"
@@ -422,7 +477,10 @@ if __name__ == "__main__":
     # Derived data includes density profiles and chi squared
     derived_data = get_derived_data(snapshots[0], snapshots[2], binnumber=int(args["nbins"]))
 
-    plot_density_r(axes[3], derived_data[0], derived_data[1], snapshots)
+    if args["plotmassflow"]:
+        plot_mass_flow(axes[3], snapshots[0], snapshots[1], derived_data[3])
+    else:
+        plot_density_r(axes[3], derived_data[0], derived_data[1], snapshots)
 
     plot_chisq(axes[4], snapshots[0], snapshots[2], derived_data[2])
 
