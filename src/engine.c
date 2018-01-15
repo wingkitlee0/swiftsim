@@ -196,7 +196,6 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
 
       /* Normal time-stepping */
       scheduler_addunlock(s, c->end_force, c->kick2);
-      scheduler_addunlock(s, c->kick2, c->timestep);
       scheduler_addunlock(s, c->timestep, c->kick1);
 
       /* Time-step limiting */
@@ -207,6 +206,8 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
         /* Make sure it is not run before kick2 */
         scheduler_addunlock(s, c->timestep, c->timestep_limiter);
         scheduler_addunlock(s, c->timestep_limiter, c->kick1);
+      } else {
+        scheduler_addunlock(s, c->kick2, c->timestep);
       }
     }
 
@@ -1286,6 +1287,8 @@ void engine_addtasks_send_gravity(struct engine *e, struct cell *ci,
  * @param ci The sending #cell.
  * @param cj Dummy cell containing the nodeID of the receiving node.
  * @param t_ti The send_ti #task, if it has already been created.
+ * @param t_limiter The send_limiter #task, if already created.
+ * @param with_limiter Are we running with the time-step limiter?
  */
 void engine_addtasks_send_timestep(struct engine *e, struct cell *ci,
                                    struct cell *cj, struct task *t_ti,
@@ -1462,6 +1465,8 @@ void engine_addtasks_recv_gravity(struct engine *e, struct cell *c,
  * @param e The #engine.
  * @param c The foreign #cell.
  * @param t_ti The recv_ti #task, if already been created.
+ * @param t_limiter The recv_limiter #task, if already created.
+ * @param with_limiter Are we running with the time-step limiter?
  */
 void engine_addtasks_recv_timestep(struct engine *e, struct cell *c,
                                    struct task *t_ti, struct task *t_limiter,
@@ -2736,6 +2741,7 @@ static inline void engine_make_hydro_loops_dependencies(
 
   if (with_limiter) {
     scheduler_addunlock(sched, c->super->kick2, limiter);
+    scheduler_addunlock(sched, limiter, c->super->timestep);
     scheduler_addunlock(sched, limiter, c->super->timestep_limiter);
   }
 }
@@ -2762,6 +2768,7 @@ static inline void engine_make_hydro_loops_dependencies(
 
   if (with_limiter) {
     scheduler_addunlock(sched, c->super->kick2, limiter);
+    scheduler_addunlock(sched, limiter, c->super->timestep);
     scheduler_addunlock(sched, limiter, c->super->timestep_limiter);
   }
 }
