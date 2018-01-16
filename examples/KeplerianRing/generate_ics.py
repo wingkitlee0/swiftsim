@@ -260,10 +260,10 @@ class Particles(object):
             (
                 np.matmul(
                     rotation_matrix,
-                    self.positions.T
+                    (self.positions - np.array(center)).T
                 )
             ).T
-        ).astype(np.float128)
+        ).astype(np.float128) + np.array(center)
         
         self.wiggle_positions()
         self.convert_cartesian_to_polar(center)
