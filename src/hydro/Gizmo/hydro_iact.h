@@ -18,6 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
+#ifndef SWIFT_GIZMO_HYDRO_IACT_H
+#define SWIFT_GIZMO_HYDRO_IACT_H
 
 #include "adiabatic_index.h"
 #include "hydro_gradients.h"
@@ -508,3 +510,5 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_limiter(
     pj->wakeup = time_bin_awake;
   }
 }
+
+#endif /* SWIFT_GIZMO_HYDRO_IACT_H */
