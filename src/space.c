@@ -2622,9 +2622,11 @@ void space_synchronize_particle_positions(struct space *s) {
  * @brief Initialises all the particles by setting them into a valid state
  *
  * Calls hydro_first_init_part() on all the particles
+ * Calls chemistry_first_init_part() on all the particles
  */
 void space_first_init_parts(struct space *s,
-                            const struct chemistry_data *chemistry) {
+                            const struct chemistry_data *chemistry,
+                            const struct cooling_function_data *cool_func) {
 
   const size_t nr_parts = s->nr_parts;
   struct part *restrict p = s->parts;
@@ -2647,6 +2649,9 @@ void space_first_init_parts(struct space *s,
     /* Also initialise the chemistry */
     chemistry_first_init_part(&p[i], &xp[i], chemistry);
 
+    /* And the cooling */
+    cooling_first_init_part(&p[i], &xp[i], cool_func);
+
 #ifdef SWIFT_DEBUG_CHECKS
     p[i].ti_drift = 0;
     p[i].ti_kick = 0;
@@ -2655,29 +2660,12 @@ void space_first_init_parts(struct space *s,
 }
 
 /**
- * @brief Initialises all the extra particle data
- *
- * Calls cooling_init_xpart() on all the particles
- */
-void space_first_init_xparts(struct space *s,
-                             const struct cooling_function_data *cool_func) {
-
-  const size_t nr_parts = s->nr_parts;
-  struct part *restrict p = s->parts;
-  struct xpart *restrict xp = s->xparts;
-
-  for (size_t i = 0; i < nr_parts; ++i) {
-
-    cooling_first_init_part(&p[i], &xp[i], cool_func);
-  }
-}
-
-/**
  * @brief Initialises all the g-particles by setting them into a valid state
  *
  * Calls gravity_first_init_gpart() on all the particles
  */
-void space_first_init_gparts(struct space *s) {
+void space_first_init_gparts(struct space *s,
+                             const struct gravity_props *grav_props) {
 
   const size_t nr_gparts = s->nr_gparts;
   struct gpart *restrict gp = s->gparts;
@@ -2694,11 +2682,11 @@ void space_first_init_gparts(struct space *s) {
     gp[i].v_full[1] = gp[i].v_full[2] = 0.f;
 #endif
 
-    gravity_first_init_gpart(&gp[i]);
+    gravity_first_init_gpart(&gp[i], grav_props);
 
 #ifdef SWIFT_DEBUG_CHECKS
-    gp->ti_drift = 0;
-    gp->ti_kick = 0;
+    gp[i].ti_drift = 0;
+    gp[i] ti_kick = 0;
 #endif
   }
 }
@@ -2728,8 +2716,8 @@ void space_first_init_sparts(struct space *s) {
     star_first_init_spart(&sp[i]);
 
 #ifdef SWIFT_DEBUG_CHECKS
-    sp->ti_drift = 0;
-    sp->ti_kick = 0;
+    sp[i].ti_drift = 0;
+    sp[i].ti_kick = 0;
 #endif
   }
 }
