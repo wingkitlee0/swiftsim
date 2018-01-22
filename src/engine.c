@@ -511,6 +511,10 @@ void engine_redistribute(struct engine *e) {
 
   const int nr_nodes = e->nr_nodes;
   const int nodeID = e->nodeID;
+  const int with_gravity = (e->policy & engine_policy_self_gravity) ||
+                           (e->policy & engine_policy_external_gravity);
+  const int with_hydro = (e->policy & engine_policy_hydro);
+  const int with_stars = (e->policy & engine_policy_stars);
   struct space *s = e->s;
   struct cell *cells = s->cells_top;
   const int nr_cells = s->nr_cells;
@@ -520,7 +524,7 @@ void engine_redistribute(struct engine *e) {
   struct part *parts = s->parts;
   struct gpart *gparts = s->gparts;
   struct spart *sparts = s->sparts;
-  ticks tic = getticks();
+  const ticks tic = getticks();
 
   /* Allocate temporary arrays to store the counts of particles to be sent
    * and the destination of each particle */
@@ -587,7 +591,7 @@ void engine_redistribute(struct engine *e) {
 #endif
 
   /* We need to re-link the gpart partners of parts. */
-  if (s->nr_parts > 0) {
+  if (s->nr_parts > 0 && with_gravity) {
     int current_dest = dest[0];
     size_t count_this_dest = 0;
     for (size_t k = 0; k < s->nr_parts; ++k) {
@@ -678,7 +682,7 @@ void engine_redistribute(struct engine *e) {
 #endif
 
   /* We need to re-link the gpart partners of sparts. */
-  if (s->nr_sparts > 0) {
+  if (s->nr_sparts > 0 && with_gravity) {
     int current_dest = s_dest[0];
     size_t count_this_dest = 0;
     for (size_t k = 0; k < s->nr_sparts; ++k) {
@@ -870,43 +874,46 @@ void engine_redistribute(struct engine *e) {
      stuff we just received */
 
   /* Restore the part<->gpart and spart<->gpart links */
-  size_t offset_parts = 0, offset_sparts = 0, offset_gparts = 0;
-  for (int node = 0; node < nr_nodes; ++node) {
+  if ((with_hydro || with_stars) && with_gravity) {
 
-    const int ind_recv = node * nr_nodes + nodeID;
-    const size_t count_parts = counts[ind_recv];
-    const size_t count_gparts = g_counts[ind_recv];
-    const size_t count_sparts = s_counts[ind_recv];
+    size_t offset_parts = 0, offset_sparts = 0, offset_gparts = 0;
+    for (int node = 0; node < nr_nodes; ++node) {
 
-    /* Loop over the gparts received from that node */
-    for (size_t k = offset_gparts; k < offset_gparts + count_gparts; ++k) {
+      const int ind_recv = node * nr_nodes + nodeID;
+      const size_t count_parts = counts[ind_recv];
+      const size_t count_gparts = g_counts[ind_recv];
+      const size_t count_sparts = s_counts[ind_recv];
 
-      /* Does this gpart have a gas partner ? */
-      if (s->gparts[k].type == swift_type_gas) {
+      /* Loop over the gparts received from that node */
+      for (size_t k = offset_gparts; k < offset_gparts + count_gparts; ++k) {
 
-        const ptrdiff_t partner_index =
-            offset_parts - s->gparts[k].id_or_neg_offset;
+        /* Does this gpart have a gas partner ? */
+        if (s->gparts[k].type == swift_type_gas) {
 
-        /* Re-link */
-        s->gparts[k].id_or_neg_offset = -partner_index;
-        s->parts[partner_index].gpart = &s->gparts[k];
+          const ptrdiff_t partner_index =
+              offset_parts - s->gparts[k].id_or_neg_offset;
+
+          /* Re-link */
+          s->gparts[k].id_or_neg_offset = -partner_index;
+          s->parts[partner_index].gpart = &s->gparts[k];
+        }
+
+        /* Does this gpart have a star partner ? */
+        if (s->gparts[k].type == swift_type_star) {
+
+          const ptrdiff_t partner_index =
+              offset_sparts - s->gparts[k].id_or_neg_offset;
+
+          /* Re-link */
+          s->gparts[k].id_or_neg_offset = -partner_index;
+          s->sparts[partner_index].gpart = &s->gparts[k];
+        }
       }
 
-      /* Does this gpart have a star partner ? */
-      if (s->gparts[k].type == swift_type_star) {
-
-        const ptrdiff_t partner_index =
-            offset_sparts - s->gparts[k].id_or_neg_offset;
-
-        /* Re-link */
-        s->gparts[k].id_or_neg_offset = -partner_index;
-        s->sparts[partner_index].gpart = &s->gparts[k];
-      }
+      offset_parts += count_parts;
+      offset_gparts += count_gparts;
+      offset_sparts += count_sparts;
     }
-
-    offset_parts += count_parts;
-    offset_gparts += count_gparts;
-    offset_sparts += count_sparts;
   }
 
   /* Clean up the counts now we done. */
