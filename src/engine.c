@@ -487,6 +487,79 @@ static void *engine_do_redistribute(int *restrict counts, char *restrict parts,
   /* And return new memory. */
   return parts_new;
 }
+/**
+ * @brief Data for redistribution mapper
+ */
+struct redist_mapper_data {
+  struct space *s;
+  int *dest;
+  int *counts;
+  void *base;
+};
+
+/**
+ * @brief #threadpool mapper function to compute the destination of the #part.
+ * @param map_data Pointer towards the #part.
+ * @param num_elements The number of particles to treat.
+ * @param extra_data Pointers to the #redist_mapper_data.
+ */
+void engine_parts_dest_mapper(void *map_data, int num_elements,
+                              void *extra_data) {
+
+  /* Unpack the data */
+  struct part *restrict parts = (struct part *)map_data;
+  struct redist_mapper_data *data = (struct redist_mapper_data *)extra_data;
+  const struct space *s = data->s;
+  const struct cell *cells = s->cells_top;
+
+  /* Get some constants */
+  const double dim_x = s->dim[0];
+  const double dim_y = s->dim[1];
+  const double dim_z = s->dim[2];
+  const int cdim[3] = {s->cdim[0], s->cdim[1], s->cdim[2]};
+  const double ih_x = s->iwidth[0];
+  const double ih_y = s->iwidth[1];
+  const double ih_z = s->iwidth[2];
+
+  int *restrict dest = data->dest + (parts - (struct part *)data->base);
+  int *restrict counts = data->counts;
+
+  for (int k = 0; k < num_elements; k++) {
+
+    /* Get the particle */
+    struct part *restrict p = &parts[k];
+
+    const double old_pos_x = p->x[0];
+    const double old_pos_y = p->x[1];
+    const double old_pos_z = p->x[2];
+
+    /* Put it back into the simulation volume */
+    const double pos_x = box_wrap(old_pos_x, 0.0, dim_x);
+    const double pos_y = box_wrap(old_pos_y, 0.0, dim_y);
+    const double pos_z = box_wrap(old_pos_z, 0.0, dim_z);
+
+    /* Get its cell index */
+    const int cid = cell_getid(cdim, pos_x * ih_x, pos_y * ih_y, pos_z * ih_z);
+
+#ifdef SWIFT_DEBUG_CHECKS
+    if (cid < 0 || cid >= s->nr_cells)
+      error("Bad cell id %i for part %u at [%.3e,%.3e,%.3e].", cid, k,
+            parts[k].x[0], parts[k].x[1], parts[k].x[2]);
+#endif
+
+    /* Destination of this particle */
+    const int destination = cells[cid].nodeID;
+    dest[k] = destination;
+
+    /* The counts array is indexed as count. */
+    atomic_inc(&counts[destination]);
+
+    /* Update the position */
+    p->x[0] = pos_x;
+    p->x[1] = pos_y;
+    p->x[2] = pos_z;
+  }
+}
 #endif
 
 /**
@@ -543,29 +616,10 @@ void engine_redistribute(struct engine *e) {
     error("Failed to allocate dest temporary buffer.");
 
   /* Get destination of each particle */
-  for (size_t k = 0; k < s->nr_parts; k++) {
-
-    /* Periodic boundary conditions */
-    for (int j = 0; j < 3; j++) {
-      if (parts[k].x[j] < 0.0)
-        parts[k].x[j] += dim[j];
-      else if (parts[k].x[j] >= dim[j])
-        parts[k].x[j] -= dim[j];
-    }
-    const int cid =
-        cell_getid(cdim, parts[k].x[0] * iwidth[0], parts[k].x[1] * iwidth[1],
-                   parts[k].x[2] * iwidth[2]);
-#ifdef SWIFT_DEBUG_CHECKS
-    if (cid < 0 || cid >= s->nr_cells)
-      error("Bad cell id %i for part %zu at [%.3e,%.3e,%.3e].", cid, k,
-            parts[k].x[0], parts[k].x[1], parts[k].x[2]);
-#endif
-
-    dest[k] = cells[cid].nodeID;
-
-    /* The counts array is indexed as count[from * nr_nodes + to]. */
-    counts[nodeID * nr_nodes + dest[k]] += 1;
-  }
+  struct redist_mapper_data parts_data = {s, dest, &counts[nodeID * nr_nodes],
+                                          parts};
+  threadpool_map(&e->threadpool, engine_parts_dest_mapper, parts, s->nr_parts,
+                 sizeof(struct part), 0, &parts_data);
 
   /* Sort the particles according to their cell index. */
   if (s->nr_parts > 0)
