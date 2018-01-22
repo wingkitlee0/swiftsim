@@ -2769,7 +2769,7 @@ static inline void engine_make_hydro_loops_dependencies(
   if (with_limiter) {
     scheduler_addunlock(sched, c->super->kick2, limiter);
     scheduler_addunlock(sched, limiter, c->super->timestep);
-    scheduler_addunlock(sched, limiter, c->super->timestep_limiter);
+    if(limiter->type != task_type_self) scheduler_addunlock(sched, limiter, c->super->timestep_limiter);
   }
 }
 
