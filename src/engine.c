@@ -378,7 +378,7 @@ void engine_make_hierarchical_tasks_mapper(void *map_data, int num_elements,
  * @result new particle data constructed from all the exchanges with the
  *         given alignment.
  */
-static void *engine_do_redistribute(int *counts, char *parts,
+static void *engine_do_redistribute(int *restrict counts, char *restrict parts,
                                     size_t new_nr_parts, size_t sizeofparts,
                                     size_t alignsize, MPI_Datatype mpi_type,
                                     int nr_nodes, int nodeID) {
@@ -498,10 +498,13 @@ static void *engine_do_redistribute(int *counts, char *parts,
  * node.
  * 2) The number of particles of each type is then exchanged.
  * 3) The particles to send are placed in a temporary buffer in which the
- * part-gpart links are preserved.
+ * part<->gpart links are preserved.
  * 4) Each node allocates enough space for the new particles.
  * 5) (Asynchronous) communications are issued to transfer the data.
+ * 6) The part<->gpart links are restored on the receiving side.
  *
+ * Note that the code will break if more than 2^32 particles have to be
+ * exchanged between any given pair of nodes.
  *
  * @param e The #engine.
  */
@@ -521,20 +524,22 @@ void engine_redistribute(struct engine *e) {
   const int *cdim = s->cdim;
   const double iwidth[3] = {s->iwidth[0], s->iwidth[1], s->iwidth[2]};
   const double dim[3] = {s->dim[0], s->dim[1], s->dim[2]};
-  struct part *parts = s->parts;
-  struct gpart *gparts = s->gparts;
-  struct spart *sparts = s->sparts;
+  struct part *restrict parts = s->parts;
+  struct gpart *restrict gparts = s->gparts;
+  struct spart *restrict sparts = s->sparts;
   const ticks tic = getticks();
 
   /* Allocate temporary arrays to store the counts of particles to be sent
    * and the destination of each particle */
-  int *counts;
-  if ((counts = (int *)malloc(sizeof(int) * nr_nodes * nr_nodes)) == NULL)
+  int *restrict counts = NULL;
+  if (posix_memalign((void *)&counts, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(int) * nr_nodes * nr_nodes) != 0)
     error("Failed to allocate counts temporary buffer.");
   bzero(counts, sizeof(int) * nr_nodes * nr_nodes);
 
-  int *dest;
-  if ((dest = (int *)malloc(sizeof(int) * s->nr_parts)) == NULL)
+  int *restrict dest = NULL;
+  if (posix_memalign((void *)&dest, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(int) * s->nr_parts) != 0)
     error("Failed to allocate dest temporary buffer.");
 
   /* Get destination of each particle */
@@ -619,16 +624,20 @@ void engine_redistribute(struct engine *e) {
   }
   free(dest);
 
-  /* Get destination of each s-particle */
-  int *s_counts;
-  if ((s_counts = (int *)malloc(sizeof(int) * nr_nodes * nr_nodes)) == NULL)
+  /* Allocate temporary arrays to store the counts of s-particles to be sent
+   * and the destination of each s-particle */
+  int *restrict s_counts = NULL;
+  if (posix_memalign((void *)&s_counts, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(int) * nr_nodes * nr_nodes) != 0)
     error("Failed to allocate s_counts temporary buffer.");
   bzero(s_counts, sizeof(int) * nr_nodes * nr_nodes);
 
-  int *s_dest;
-  if ((s_dest = (int *)malloc(sizeof(int) * s->nr_sparts)) == NULL)
+  int *restrict s_dest = NULL;
+  if (posix_memalign((void *)&s_dest, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(int) * s->nr_sparts) != 0)
     error("Failed to allocate s_dest temporary buffer.");
 
+  /* Get destination of each s-particle */
   for (size_t k = 0; k < s->nr_sparts; k++) {
 
     /* Periodic boundary conditions */
@@ -711,16 +720,20 @@ void engine_redistribute(struct engine *e) {
 
   free(s_dest);
 
-  /* Get destination of each g-particle */
-  int *g_counts;
-  if ((g_counts = (int *)malloc(sizeof(int) * nr_nodes * nr_nodes)) == NULL)
-    error("Failed to allocate g_gcount temporary buffer.");
+  /* Allocate temporary arrays to store the counts of g-particles to be sent
+   * and the destination of each g-particle */
+  int *restrict g_counts = NULL;
+  if (posix_memalign((void *)&g_counts, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(int) * nr_nodes * nr_nodes) != 0)
+    error("Failed to allocate g_count temporary buffer.");
   bzero(g_counts, sizeof(int) * nr_nodes * nr_nodes);
 
-  int *g_dest;
-  if ((g_dest = (int *)malloc(sizeof(int) * s->nr_gparts)) == NULL)
+  int *restrict g_dest = NULL;
+  if (posix_memalign((void *)&g_dest, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(int) * s->nr_gparts) != 0)
     error("Failed to allocate g_dest temporary buffer.");
 
+  /* Get destination of each g-particle */
   for (size_t k = 0; k < s->nr_gparts; k++) {
 
     /* Periodic boundary conditions */
