@@ -31,6 +31,7 @@ matplotlib.rc("text", usetex=True)
 
 import yt
 import h5py
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -396,9 +397,9 @@ if __name__ == "__main__":
         "--beginning",
         help="""
              Initial snapshot to start analysis at.
-             Default: 0.
+             Default: First snapshot in the folder.
              """,
-        default=0,
+        default=-1,
         required=False
     )
 
@@ -407,9 +408,9 @@ if __name__ == "__main__":
         "--middle",
         help="""
              Middle snapshot in the top row of three surface density plots.
-             Default: 100.
+             Default: (end - beginning) // 2.
              """,
-        default=100,
+        default=-1,
         required=False
     )
 
@@ -418,9 +419,9 @@ if __name__ == "__main__":
         "--end",
         help="""
              Snapshot to end the analysis at.
-             Default: 200.
+             Default: Last snapshot in the folder.
              """,
-        default=200,
+        default=-1,
         required=False
     )
 
@@ -458,10 +459,33 @@ if __name__ == "__main__":
         required=False
     )
 
+    parser.add_argument(
+        "-s",
+        "--slug",
+        help="""
+             The first part of the output filename. For example, for snapshots
+             with the naming scheme keplerian_ring_xxxx.hdf5, this would be the
+             default value of keplerian_ring.
+             """,
+        default="keplerian_ring",
+        required=False
+    )
+
     args = vars(parser.parse_args())
 
-    filename = "keplerian_ring"
-    snapshots = [int(x) for x in [args["beginning"], args["middle"], args["end"]]]
+    filename = args["slug"]
+
+    if args["beginning"] == -1:
+        # We look for the maximum number of snapshots.
+        numbers = [
+            int(x[len(filename)+1:-5])
+            for x in os.listdir() if
+            x[:len(filename)] == filename and x[-1] == "5"
+        ]
+
+        snapshots = [min(numbers), (max(numbers) - min(numbers)) // 2, max(numbers)]
+    else:
+        snapshots = [args["beginning"], args["middle"], args["end"]]
 
     figure = plt.figure(figsize=(12, 10))
     axes = get_axes_grid(figure)
