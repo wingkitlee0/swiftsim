@@ -297,7 +297,13 @@ def surface_density_plot(ax, snapnum, filename="keplerian_ring", density_limits=
     }
 
     filename = "{}_{:04d}.hdf5".format(filename, snapnum)
-    snap = yt.load(filename, unit_base=unit_base, over_refine_factor=2)
+
+    try:
+        snap = yt.load(filename, unit_base=unit_base, over_refine_factor=2)
+    except yt.utilities.exceptions.YTOutputNotIdentified:
+        # Probably the file isn't here because we supplied a too high snapshot
+        # number. Just return what we're given.
+        return density_limits, vlim
 
     projection_plot = yt.ProjectionPlot(
         snap,
