@@ -42,6 +42,7 @@
 #include "approx_math.h"
 #include "atomic.h"
 #include "cell.h"
+#include "cell_recurse.h"
 #include "const.h"
 #include "cooling.h"
 #include "debug.h"
@@ -1935,13 +1936,13 @@ void *runner_main(void *data) {
 
         case task_type_sub_pair:
           if (t->subtype == task_subtype_density)
-            runner_dosub_pair1_density(r, ci, cj, t->flags, 1);
+            runner_dosub_pair1_density(r, ci, cj);
 #ifdef EXTRA_HYDRO_LOOP
           else if (t->subtype == task_subtype_gradient)
-            runner_dosub_pair1_gradient(r, ci, cj, t->flags, 1);
+            runner_dosub_pair1_gradient(r, ci, cj);
 #endif
           else if (t->subtype == task_subtype_force)
-            runner_dosub_pair2_force(r, ci, cj, t->flags, 1);
+            runner_dosub_pair2_force(r, ci, cj);
           else
             error("Unknown/invalid task subtype (%d).", t->subtype);
           break;
