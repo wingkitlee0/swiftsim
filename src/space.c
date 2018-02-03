@@ -41,6 +41,7 @@
 
 /* Local headers. */
 #include "atomic.h"
+#include "chemistry.h"
 #include "const.h"
 #include "cooling.h"
 #include "engine.h"
@@ -52,6 +53,7 @@
 #include "memswap.h"
 #include "minmax.h"
 #include "multipole.h"
+#include "restart.h"
 #include "runner.h"
 #include "sort_part.h"
 #include "stars.h"
@@ -60,8 +62,9 @@
 
 /* Split size. */
 int space_splitsize = space_splitsize_default;
-int space_subsize_pair = space_subsize_pair_default;
-int space_subsize_self = space_subsize_self_default;
+int space_subsize_pair_hydro = space_subsize_pair_hydro_default;
+int space_subsize_self_hydro = space_subsize_self_hydro_default;
+int space_subsize_pair_grav = space_subsize_pair_grav_default;
 int space_subsize_self_grav = space_subsize_self_grav_default;
 int space_maxsize = space_maxsize_default;
 #ifdef SWIFT_DEBUG_CHECKS
@@ -224,6 +227,7 @@ void space_rebuild_recycle_mapper(void *map_data, int num_elements,
     c->kick1 = NULL;
     c->kick2 = NULL;
     c->timestep = NULL;
+    c->end_force = NULL;
     c->drift_part = NULL;
     c->drift_gpart = NULL;
     c->cooling = NULL;
@@ -381,6 +385,9 @@ void space_regrid(struct space *s, int verbose) {
     }
   }
 
+  /* Are we about to allocate new top level cells without a regrid?
+   * Can happen when restarting the application. */
+  int no_regrid = (s->cells_top == NULL && oldnodeIDs == NULL);
 #endif
 
   /* Do we need to re-build the upper-level cells? */
@@ -510,6 +517,21 @@ void space_regrid(struct space *s, int verbose) {
 
       /* Finished with these. */
       free(oldnodeIDs);
+
+    } else if (no_regrid && s->e != NULL) {
+      /* If we have created the top-levels cells and not done an initial
+       * partition (can happen when restarting), then the top-level cells
+       * are not assigned to a node, we must do that and then associate the
+       * particles with the cells. Note requires that
+       * partition_store_celllist() was called once before, or just before
+       * dumping the restart files.*/
+      partition_restore_celllist(s, s->e->reparttype);
+
+      /* Now re-distribute the particles, should just add to cells? */
+      engine_redistribute(s->e);
+
+      /* Make the proxies. */
+      engine_makeproxies(s->e);
     }
 #endif /* WITH_MPI */
 
@@ -1080,7 +1102,11 @@ void space_parts_get_cell_index_mapper(void *map_data, int nr_parts,
     ind[k] = index;
 
 #ifdef SWIFT_DEBUG_CHECKS
-    if (pos_x > dim_x || pos_y > dim_y || pos_z > pos_z || pos_x < 0. ||
+    if (index < 0 || index >= cdim[0] * cdim[1] * cdim[2])
+      error("Invalid index=%d cdim=[%d %d %d] p->x=[%e %e %e]", index, cdim[0],
+            cdim[1], cdim[2], pos_x, pos_y, pos_z);
+
+    if (pos_x >= dim_x || pos_y >= dim_y || pos_z >= dim_z || pos_x < 0. ||
         pos_y < 0. || pos_z < 0.)
       error("Particle outside of simulation box. p->x=[%e %e %e]", pos_x, pos_y,
             pos_z);
@@ -1137,6 +1163,17 @@ void space_gparts_get_cell_index_mapper(void *map_data, int nr_gparts,
         cell_getid(cdim, pos_x * ih_x, pos_y * ih_y, pos_z * ih_z);
     ind[k] = index;
 
+#ifdef SWIFT_DEBUG_CHECKS
+    if (index < 0 || index >= cdim[0] * cdim[1] * cdim[2])
+      error("Invalid index=%d cdim=[%d %d %d] p->x=[%e %e %e]", index, cdim[0],
+            cdim[1], cdim[2], pos_x, pos_y, pos_z);
+
+    if (pos_x >= dim_x || pos_y >= dim_y || pos_z >= dim_z || pos_x < 0. ||
+        pos_y < 0. || pos_z < 0.)
+      error("Particle outside of simulation box. p->x=[%e %e %e]", pos_x, pos_y,
+            pos_z);
+#endif
+
     /* Update the position */
     gp->x[0] = pos_x;
     gp->x[1] = pos_y;
@@ -1187,6 +1224,17 @@ void space_sparts_get_cell_index_mapper(void *map_data, int nr_sparts,
     const int index =
         cell_getid(cdim, pos_x * ih_x, pos_y * ih_y, pos_z * ih_z);
     ind[k] = index;
+
+#ifdef SWIFT_DEBUG_CHECKS
+    if (index < 0 || index >= cdim[0] * cdim[1] * cdim[2])
+      error("Invalid index=%d cdim=[%d %d %d] p->x=[%e %e %e]", index, cdim[0],
+            cdim[1], cdim[2], pos_x, pos_y, pos_z);
+
+    if (pos_x >= dim_x || pos_y >= dim_y || pos_z >= dim_z || pos_x < 0. ||
+        pos_y < 0. || pos_z < 0.)
+      error("Particle outside of simulation box. p->x=[%e %e %e]", pos_x, pos_y,
+            pos_z);
+#endif
 
     /* Update the position */
     sp->x[0] = pos_x;
@@ -2206,7 +2254,8 @@ void space_split_recursive(struct space *s, struct cell *c,
     c->split = 0;
     maxdepth = c->depth;
 
-    timebin_t time_bin_min = num_time_bins, time_bin_max = 0;
+    timebin_t hydro_time_bin_min = num_time_bins, hydro_time_bin_max = 0;
+    timebin_t gravity_time_bin_min = num_time_bins, gravity_time_bin_max = 0;
 
     /* parts: Get dt_min/dt_max and h_max. */
     for (int k = 0; k < count; k++) {
@@ -2214,8 +2263,8 @@ void space_split_recursive(struct space *s, struct cell *c,
       if (parts[k].time_bin == time_bin_inhibited)
         error("Inhibited particle present in space_split()");
 #endif
-      time_bin_min = min(time_bin_min, parts[k].time_bin);
-      time_bin_max = max(time_bin_max, parts[k].time_bin);
+      hydro_time_bin_min = min(hydro_time_bin_min, parts[k].time_bin);
+      hydro_time_bin_max = max(hydro_time_bin_max, parts[k].time_bin);
       h_max = max(h_max, parts[k].h);
     }
     /* parts: Reset x_diff */
@@ -2228,11 +2277,10 @@ void space_split_recursive(struct space *s, struct cell *c,
     for (int k = 0; k < gcount; k++) {
 #ifdef SWIFT_DEBUG_CHECKS
       if (gparts[k].time_bin == time_bin_inhibited)
-        error("Inhibited s-particle present in space_split()");
+        error("Inhibited g-particle present in space_split()");
 #endif
-      time_bin_min = min(time_bin_min, gparts[k].time_bin);
-      time_bin_max = max(time_bin_max, gparts[k].time_bin);
-
+      gravity_time_bin_min = min(gravity_time_bin_min, gparts[k].time_bin);
+      gravity_time_bin_max = max(gravity_time_bin_max, gparts[k].time_bin);
       gparts[k].x_diff[0] = 0.f;
       gparts[k].x_diff[1] = 0.f;
       gparts[k].x_diff[2] = 0.f;
@@ -2241,20 +2289,23 @@ void space_split_recursive(struct space *s, struct cell *c,
     for (int k = 0; k < scount; k++) {
 #ifdef SWIFT_DEBUG_CHECKS
       if (sparts[k].time_bin == time_bin_inhibited)
-        error("Inhibited g-particle present in space_split()");
+        error("Inhibited s-particle present in space_split()");
 #endif
-      time_bin_min = min(time_bin_min, sparts[k].time_bin);
-      time_bin_max = max(time_bin_max, sparts[k].time_bin);
+      gravity_time_bin_min = min(gravity_time_bin_min, sparts[k].time_bin);
+      gravity_time_bin_max = max(gravity_time_bin_max, sparts[k].time_bin);
     }
 
     /* Convert into integer times */
-    ti_hydro_end_min = get_integer_time_end(e->ti_current, time_bin_min);
-    ti_hydro_end_max = get_integer_time_end(e->ti_current, time_bin_max);
-    ti_hydro_beg_max = get_integer_time_begin(e->ti_current + 1, time_bin_max);
-    ti_gravity_end_min = get_integer_time_end(e->ti_current, time_bin_min);
-    ti_gravity_end_max = get_integer_time_end(e->ti_current, time_bin_max);
+    ti_hydro_end_min = get_integer_time_end(e->ti_current, hydro_time_bin_min);
+    ti_hydro_end_max = get_integer_time_end(e->ti_current, hydro_time_bin_max);
+    ti_hydro_beg_max =
+        get_integer_time_begin(e->ti_current + 1, hydro_time_bin_max);
+    ti_gravity_end_min =
+        get_integer_time_end(e->ti_current, gravity_time_bin_min);
+    ti_gravity_end_max =
+        get_integer_time_end(e->ti_current, gravity_time_bin_max);
     ti_gravity_beg_max =
-        get_integer_time_begin(e->ti_current + 1, time_bin_max);
+        get_integer_time_begin(e->ti_current + 1, gravity_time_bin_max);
 
     /* Construct the multipole and the centre of mass*/
     if (s->gravity) {
@@ -2586,8 +2637,11 @@ void space_synchronize_particle_positions(struct space *s) {
  * @brief Initialises all the particles by setting them into a valid state
  *
  * Calls hydro_first_init_part() on all the particles
+ * Calls chemistry_first_init_part() on all the particles
  */
-void space_first_init_parts(struct space *s) {
+void space_first_init_parts(struct space *s,
+                            const struct chemistry_data *chemistry,
+                            const struct cooling_function_data *cool_func) {
 
   const size_t nr_parts = s->nr_parts;
   struct part *restrict p = s->parts;
@@ -2607,27 +2661,16 @@ void space_first_init_parts(struct space *s) {
 
     hydro_first_init_part(&p[i], &xp[i]);
 
+    /* Also initialise the chemistry */
+    chemistry_first_init_part(&p[i], &xp[i], chemistry);
+
+    /* And the cooling */
+    cooling_first_init_part(&p[i], &xp[i], cool_func);
+
 #ifdef SWIFT_DEBUG_CHECKS
-    p->ti_drift = 0;
-    p->ti_kick = 0;
+    p[i].ti_drift = 0;
+    p[i].ti_kick = 0;
 #endif
-  }
-}
-
-/**
- * @brief Initialises all the extra particle data
- *
- * Calls cooling_init_xpart() on all the particles
- */
-void space_first_init_xparts(struct space *s) {
-
-  const size_t nr_parts = s->nr_parts;
-  struct part *restrict p = s->parts;
-  struct xpart *restrict xp = s->xparts;
-
-  for (size_t i = 0; i < nr_parts; ++i) {
-
-    cooling_init_part(&p[i], &xp[i]);
   }
 }
 
@@ -2636,7 +2679,8 @@ void space_first_init_xparts(struct space *s) {
  *
  * Calls gravity_first_init_gpart() on all the particles
  */
-void space_first_init_gparts(struct space *s) {
+void space_first_init_gparts(struct space *s,
+                             const struct gravity_props *grav_props) {
 
   const size_t nr_gparts = s->nr_gparts;
   struct gpart *restrict gp = s->gparts;
@@ -2653,11 +2697,11 @@ void space_first_init_gparts(struct space *s) {
     gp[i].v_full[1] = gp[i].v_full[2] = 0.f;
 #endif
 
-    gravity_first_init_gpart(&gp[i]);
+    gravity_first_init_gpart(&gp[i], grav_props);
 
 #ifdef SWIFT_DEBUG_CHECKS
-    gp->ti_drift = 0;
-    gp->ti_kick = 0;
+    gp[i].ti_drift = 0;
+    gp[i].ti_kick = 0;
 #endif
   }
 }
@@ -2687,8 +2731,8 @@ void space_first_init_sparts(struct space *s) {
     star_first_init_spart(&sp[i]);
 
 #ifdef SWIFT_DEBUG_CHECKS
-    sp->ti_drift = 0;
-    sp->ti_kick = 0;
+    sp[i].ti_drift = 0;
+    sp[i].ti_kick = 0;
 #endif
   }
 }
@@ -2857,21 +2901,29 @@ void space_init(struct space *s, const struct swift_params *params,
   /* Get the constants for the scheduler */
   space_maxsize = parser_get_opt_param_int(params, "Scheduler:cell_max_size",
                                            space_maxsize_default);
-  space_subsize_pair = parser_get_opt_param_int(
-      params, "Scheduler:cell_sub_size_pair", space_subsize_pair_default);
-  space_subsize_self = parser_get_opt_param_int(
-      params, "Scheduler:cell_sub_size_self", space_subsize_self_default);
+  space_subsize_pair_hydro =
+      parser_get_opt_param_int(params, "Scheduler:cell_sub_size_pair_hydro",
+                               space_subsize_pair_hydro_default);
+  space_subsize_self_hydro =
+      parser_get_opt_param_int(params, "Scheduler:cell_sub_size_self_hydro",
+                               space_subsize_self_hydro_default);
+  space_subsize_pair_grav =
+      parser_get_opt_param_int(params, "Scheduler:cell_sub_size_pair_grav",
+                               space_subsize_pair_grav_default);
   space_subsize_self_grav =
       parser_get_opt_param_int(params, "Scheduler:cell_sub_size_self_grav",
                                space_subsize_self_grav_default);
   space_splitsize = parser_get_opt_param_int(
       params, "Scheduler:cell_split_size", space_splitsize_default);
 
-  if (verbose)
-    message(
-        "max_size set to %d, sub_size_pair set to %d, sub_size_self set to %d, "
-        "split_size set to %d",
-        space_maxsize, space_subsize_pair, space_subsize_self, space_splitsize);
+  if (verbose) {
+    message("max_size set to %d split_size set to %d", space_maxsize,
+            space_splitsize);
+    message("sub_size_pair_hydro set to %d, sub_size_self_hydro set to %d",
+            space_subsize_pair_hydro, space_subsize_self_hydro);
+    message("sub_size_pair_grav set to %d, sub_size_self_grav set to %d",
+            space_subsize_pair_grav, space_subsize_self_grav);
+  }
 
   /* Apply h scaling */
   const double scaling =
@@ -2962,17 +3014,6 @@ void space_init(struct space *s, const struct swift_params *params,
   }
 
   hydro_space_init(&s->hs, s);
-
-  ticks tic = getticks();
-  if (verbose) message("first init...");
-  /* Set the particles in a state where they are ready for a run */
-  space_first_init_parts(s);
-  space_first_init_xparts(s);
-  space_first_init_gparts(s);
-  space_first_init_sparts(s);
-  if (verbose)
-    message("took %.3f %s.", clocks_from_ticks(getticks() - tic),
-            clocks_getunit());
 
   /* Init the space lock. */
   if (lock_init(&s->lock) != 0) error("Failed to create space spin-lock.");
@@ -3196,4 +3237,113 @@ void space_clean(struct space *s) {
   free(s->xparts);
   free(s->gparts);
   free(s->sparts);
+}
+
+/**
+ * @brief Write the space struct and its contents to the given FILE as a
+ * stream of bytes.
+ *
+ * @param s the space
+ * @param stream the file stream
+ */
+void space_struct_dump(struct space *s, FILE *stream) {
+
+  restart_write_blocks(s, sizeof(struct space), 1, stream, "space",
+                       "space struct");
+
+  /* More things to write. */
+  if (s->nr_parts > 0) {
+    restart_write_blocks(s->parts, s->nr_parts, sizeof(struct part), stream,
+                         "parts", "parts");
+    restart_write_blocks(s->xparts, s->nr_parts, sizeof(struct xpart), stream,
+                         "xparts", "xparts");
+  }
+  if (s->nr_gparts > 0)
+    restart_write_blocks(s->gparts, s->nr_gparts, sizeof(struct gpart), stream,
+                         "gparts", "gparts");
+
+  if (s->nr_sparts > 0)
+    restart_write_blocks(s->sparts, s->nr_sparts, sizeof(struct spart), stream,
+                         "sparts", "sparts");
+}
+
+/**
+ * @brief Re-create a space struct and its contents from the given FILE
+ *        stream.
+ *
+ * @param s the space
+ * @param stream the file stream
+ */
+void space_struct_restore(struct space *s, FILE *stream) {
+
+  restart_read_blocks(s, sizeof(struct space), 1, stream, NULL, "space struct");
+
+  /* Things that should be reconstructed in a rebuild. */
+  s->cells_top = NULL;
+  s->cells_sub = NULL;
+  s->multipoles_top = NULL;
+  s->multipoles_sub = NULL;
+  s->local_cells_top = NULL;
+  s->grav_top_level = NULL;
+#ifdef WITH_MPI
+  s->parts_foreign = NULL;
+  s->size_parts_foreign = 0;
+  s->gparts_foreign = NULL;
+  s->size_gparts_foreign = 0;
+  s->sparts_foreign = NULL;
+  s->size_sparts_foreign = 0;
+#endif
+
+  /* More things to read. */
+  s->parts = NULL;
+  s->xparts = NULL;
+  if (s->nr_parts > 0) {
+
+    /* Need the memory for these. */
+    if (posix_memalign((void *)&s->parts, part_align,
+                       s->size_parts * sizeof(struct part)) != 0)
+      error("Failed to allocate restore part array.");
+    if (posix_memalign((void *)&s->xparts, xpart_align,
+                       s->size_parts * sizeof(struct xpart)) != 0)
+      error("Failed to allocate restore xpart array.");
+
+    restart_read_blocks(s->parts, s->nr_parts, sizeof(struct part), stream,
+                        NULL, "parts");
+    restart_read_blocks(s->xparts, s->nr_parts, sizeof(struct xpart), stream,
+                        NULL, "xparts");
+  }
+  s->gparts = NULL;
+  if (s->nr_gparts > 0) {
+    if (posix_memalign((void *)&s->gparts, gpart_align,
+                       s->size_gparts * sizeof(struct gpart)) != 0)
+      error("Failed to allocate restore gpart array.");
+
+    restart_read_blocks(s->gparts, s->nr_gparts, sizeof(struct gpart), stream,
+                        NULL, "gparts");
+  }
+
+  s->sparts = NULL;
+  if (s->nr_sparts > 0) {
+    if (posix_memalign((void *)&s->sparts, spart_align,
+                       s->size_sparts * sizeof(struct spart)) != 0)
+      error("Failed to allocate restore spart array.");
+
+    restart_read_blocks(s->sparts, s->nr_sparts, sizeof(struct spart), stream,
+                        NULL, "sparts");
+  }
+
+  /* Need to reconnect the gravity parts to their hydro and star particles. */
+  /* Re-link the parts. */
+  if (s->nr_parts > 0 && s->nr_gparts > 0)
+    part_relink_parts_to_gparts(s->gparts, s->nr_gparts, s->parts);
+
+  /* Re-link the sparts. */
+  if (s->nr_sparts > 0 && s->nr_gparts > 0)
+    part_relink_sparts_to_gparts(s->gparts, s->nr_gparts, s->sparts);
+
+#ifdef SWIFT_DEBUG_CHECKS
+  /* Verify that everything is correct */
+  part_verify_links(s->parts, s->gparts, s->sparts, s->nr_parts, s->nr_gparts,
+                    s->nr_sparts, 1);
+#endif
 }

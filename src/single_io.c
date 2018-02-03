@@ -35,7 +35,9 @@
 #include "single_io.h"
 
 /* Local includes. */
+#include "chemistry_io.h"
 #include "common_io.h"
+#include "cooling.h"
 #include "dimension.h"
 #include "engine.h"
 #include "error.h"
@@ -310,7 +312,7 @@ void read_ic_single(char* fileName, const struct unit_system* internal_units,
                     struct spart** sparts, size_t* Ngas, size_t* Ngparts,
                     size_t* Nstars, int* periodic, int* flag_entropy,
                     int with_hydro, int with_gravity, int with_stars,
-                    int dry_run) {
+                    int n_threads, int dry_run) {
 
   hid_t h_file = 0, h_grp = 0;
   /* GADGET has only cubic boxes (in cosmological mode) */
@@ -485,6 +487,7 @@ void read_ic_single(char* fileName, const struct unit_system* internal_units,
         if (with_hydro) {
           Nparticles = *Ngas;
           hydro_read_particles(*parts, list, &num_fields);
+          num_fields += chemistry_read_particles(*parts, list + num_fields);
         }
         break;
 
@@ -515,16 +518,25 @@ void read_ic_single(char* fileName, const struct unit_system* internal_units,
     H5Gclose(h_grp);
   }
 
-  /* Prepare the DM particles */
-  if (!dry_run && with_gravity) io_prepare_dm_gparts(*gparts, Ndm);
+  /* Duplicate the parts for gravity */
+  if (!dry_run && with_gravity) {
 
-  /* Duplicate the hydro particles into gparts */
-  if (!dry_run && with_gravity && with_hydro)
-    io_duplicate_hydro_gparts(*parts, *gparts, *Ngas, Ndm);
+    /* Let's initialise a bit of thread parallelism here */
+    struct threadpool tp;
+    threadpool_init(&tp, n_threads);
 
-  /* Duplicate the star particles into gparts */
-  if (!dry_run && with_gravity && with_stars)
-    io_duplicate_star_gparts(*sparts, *gparts, *Nstars, Ndm + *Ngas);
+    /* Prepare the DM particles */
+    io_prepare_dm_gparts(&tp, *gparts, Ndm);
+
+    /* Duplicate the hydro particles into gparts */
+    if (with_hydro) io_duplicate_hydro_gparts(&tp, *parts, *gparts, *Ngas, Ndm);
+
+    /* Duplicate the star particles into gparts */
+    if (with_stars)
+      io_duplicate_star_gparts(&tp, *sparts, *gparts, *Nstars, Ndm + *Ngas);
+
+    threadpool_clean(&tp);
+  }
 
   /* message("Done Reading particles..."); */
 
@@ -565,7 +577,6 @@ void write_output_single(struct engine* e, const char* baseName,
   struct gpart* gparts = e->s->gparts;
   struct gpart* dmparts = NULL;
   struct spart* sparts = e->s->sparts;
-  static int outputCount = 0;
 
   /* Number of unassociated gparts */
   const size_t Ndm = Ntot > 0 ? Ntot - (Ngas + Nstars) : 0;
@@ -575,10 +586,10 @@ void write_output_single(struct engine* e, const char* baseName,
   /* File name */
   char fileName[FILENAME_BUFFER_SIZE];
   snprintf(fileName, FILENAME_BUFFER_SIZE, "%s_%04i.hdf5", baseName,
-           outputCount);
+           e->snapshotOutputCount);
 
   /* First time, we need to create the XMF file */
-  if (outputCount == 0) xmf_create_file(baseName);
+  if (e->snapshotOutputCount == 0) xmf_create_file(baseName);
 
   /* Prepare the XMF file for the new entry */
   FILE* xmfFile = 0;
@@ -652,9 +663,17 @@ void write_output_single(struct engine* e, const char* baseName,
                       H5P_DEFAULT);
     if (h_grp < 0) error("Error while creating SPH group");
     hydro_props_print_snapshot(h_grp, e->hydro_properties);
-    writeSPHflavour(h_grp);
+    hydro_write_flavour(h_grp);
     H5Gclose(h_grp);
   }
+
+  /* Print the subgrid parameters */
+  h_grp = H5Gcreate(h_file, "/SubgridScheme", H5P_DEFAULT, H5P_DEFAULT,
+                    H5P_DEFAULT);
+  if (h_grp < 0) error("Error while creating subgrid group");
+  cooling_write_flavour(h_grp);
+  chemistry_write_flavour(h_grp);
+  H5Gclose(h_grp);
 
   /* Print the gravity parameters */
   if (e->policy & engine_policy_self_gravity) {
@@ -741,6 +760,7 @@ void write_output_single(struct engine* e, const char* baseName,
       case swift_type_gas:
         N = Ngas;
         hydro_write_particles(parts, list, &num_fields);
+        num_fields += chemistry_write_particles(parts, list + num_fields);
         break;
 
       case swift_type_dark_matter:
@@ -786,14 +806,14 @@ void write_output_single(struct engine* e, const char* baseName,
   }
 
   /* Write LXMF file descriptor */
-  xmf_write_outputfooter(xmfFile, outputCount, e->time);
+  xmf_write_outputfooter(xmfFile, e->snapshotOutputCount, e->time);
 
   /* message("Done writing particles..."); */
 
   /* Close file */
   H5Fclose(h_file);
 
-  ++outputCount;
+  e->snapshotOutputCount++;
 }
 
 #endif /* HAVE_HDF5 */

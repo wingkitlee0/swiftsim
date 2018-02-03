@@ -52,6 +52,7 @@
 #include "atomic.h"
 #include "cell.h"
 #include "clocks.h"
+#include "cooling.h"
 #include "cycle.h"
 #include "debug.h"
 #include "error.h"
@@ -64,10 +65,12 @@
 #include "partition.h"
 #include "profiler.h"
 #include "proxy.h"
+#include "restart.h"
 #include "runner.h"
 #include "serial_io.h"
 #include "single_io.h"
 #include "sort_part.h"
+#include "sourceterms.h"
 #include "statistics.h"
 #include "timers.h"
 #include "tools.h"
@@ -170,6 +173,7 @@ void engine_add_ghosts(struct engine *e, struct cell *c, struct task *ghost_in,
 void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
 
   struct scheduler *s = &e->sched;
+  const int is_with_cooling = (e->policy & engine_policy_cooling);
 
   /* Are we in a super-cell ? */
   if (c->super == c) {
@@ -188,6 +192,11 @@ void engine_make_hierarchical_tasks_common(struct engine *e, struct cell *c) {
       c->timestep = scheduler_addtask(s, task_type_timestep, task_subtype_none,
                                       0, 0, c, NULL);
 
+      /* Add the task finishing the force calculation */
+      c->end_force = scheduler_addtask(s, task_type_end_force,
+                                       task_subtype_none, 0, 0, c, NULL);
+
+      if (!is_with_cooling) scheduler_addunlock(s, c->end_force, c->kick2);
       scheduler_addunlock(s, c->kick2, c->timestep);
       scheduler_addunlock(s, c->timestep, c->kick1);
     }
@@ -254,6 +263,7 @@ void engine_make_hierarchical_tasks_hydro(struct engine *e, struct cell *c) {
         c->cooling = scheduler_addtask(s, task_type_cooling, task_subtype_none,
                                        0, 0, c, NULL);
 
+        scheduler_addunlock(s, c->super->end_force, c->cooling);
         scheduler_addunlock(s, c->cooling, c->super->kick2);
       }
 
@@ -319,7 +329,7 @@ void engine_make_hierarchical_tasks_gravity(struct engine *e, struct cell *c) {
         if (periodic) scheduler_addunlock(s, c->grav_ghost_out, c->grav_down);
         scheduler_addunlock(s, c->init_grav, c->grav_long_range);
         scheduler_addunlock(s, c->grav_long_range, c->grav_down);
-        scheduler_addunlock(s, c->grav_down, c->super->kick2);
+        scheduler_addunlock(s, c->grav_down, c->super->end_force);
       }
     }
 
@@ -1169,7 +1179,7 @@ void engine_addtasks_send_hydro(struct engine *e, struct cell *ci,
 
 #else
       /* The send_rho task should unlock the super_hydro-cell's kick task. */
-      scheduler_addunlock(s, t_rho, ci->super->kick2);
+      scheduler_addunlock(s, t_rho, ci->super->end_force);
 
       /* The send_rho task depends on the cell's ghost task. */
       scheduler_addunlock(s, ci->super_hydro->ghost_out, t_rho);
@@ -1482,9 +1492,9 @@ void engine_exchange_cells(struct engine *e) {
   }
 
   /* Allocate the pcells. */
-  struct pcell *pcells;
-  if ((pcells = (struct pcell *)malloc(sizeof(struct pcell) * count_out)) ==
-      NULL)
+  struct pcell *pcells = NULL;
+  if (posix_memalign((void **)&pcells, SWIFT_CACHE_ALIGNMENT,
+                     sizeof(struct pcell) * count_out) != 0)
     error("Failed to allocate pcell buffer.");
 
   /* Pack the cells. */
@@ -2048,11 +2058,14 @@ void engine_exchange_proxy_multipoles(struct engine *e) {
   }
 
   /* Allocate the buffers for the packed data */
-  struct gravity_tensors *buffer_send =
-      malloc(sizeof(struct gravity_tensors) * count_send);
-  struct gravity_tensors *buffer_recv =
-      malloc(sizeof(struct gravity_tensors) * count_recv);
-  if (buffer_send == NULL || buffer_recv == NULL)
+  struct gravity_tensors *buffer_send = NULL;
+  if (posix_memalign((void **)&buffer_send, SWIFT_CACHE_ALIGNMENT,
+                     count_send * sizeof(struct gravity_tensors)) != 0)
+    error("Unable to allocate memory for multipole transactions");
+
+  struct gravity_tensors *buffer_recv = NULL;
+  if (posix_memalign((void **)&buffer_recv, SWIFT_CACHE_ALIGNMENT,
+                     count_recv * sizeof(struct gravity_tensors)) != 0)
     error("Unable to allocate memory for multipole transactions");
 
   /* Also allocate the MPI requests */
@@ -2561,7 +2574,7 @@ static inline void engine_make_external_gravity_dependencies(
 
   /* init --> external gravity --> kick */
   scheduler_addunlock(sched, c->super_gravity->drift_gpart, gravity);
-  scheduler_addunlock(sched, gravity, c->super->kick2);
+  scheduler_addunlock(sched, gravity, c->super->end_force);
 }
 
 /**
@@ -2734,7 +2747,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       /* Now, build all the dependencies for the hydro */
       engine_make_hydro_loops_dependencies(sched, t, t2, t3, t->ci,
                                            with_cooling);
-      scheduler_addunlock(sched, t3, t->ci->super->kick2);
+      scheduler_addunlock(sched, t3, t->ci->super->end_force);
 #else
 
       /* Start by constructing the task for the second hydro loop */
@@ -2746,7 +2759,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
 
       /* Now, build all the dependencies for the hydro */
       engine_make_hydro_loops_dependencies(sched, t, t2, t->ci, with_cooling);
-      scheduler_addunlock(sched, t2, t->ci->super->kick2);
+      scheduler_addunlock(sched, t2, t->ci->super->end_force);
 #endif
     }
 
@@ -2781,14 +2794,14 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t2, t3, t->ci,
                                              with_cooling);
-        scheduler_addunlock(sched, t3, t->ci->super->kick2);
+        scheduler_addunlock(sched, t3, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
           engine_make_hydro_loops_dependencies(sched, t, t2, t3, t->cj,
                                                with_cooling);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t3, t->cj->super->kick2);
+          scheduler_addunlock(sched, t3, t->cj->super->end_force);
       }
 
 #else
@@ -2805,14 +2818,14 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       /* that are local and are not descendant of the same super_hydro-cells */
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t2, t->ci, with_cooling);
-        scheduler_addunlock(sched, t2, t->ci->super->kick2);
+        scheduler_addunlock(sched, t2, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
           engine_make_hydro_loops_dependencies(sched, t, t2, t->cj,
                                                with_cooling);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t2, t->cj->super->kick2);
+          scheduler_addunlock(sched, t2, t->cj->super->end_force);
       }
 
 #endif
@@ -2846,7 +2859,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t2, t3, t->ci,
                                              with_cooling);
-        scheduler_addunlock(sched, t3, t->ci->super->kick2);
+        scheduler_addunlock(sched, t3, t->ci->super->end_force);
       }
 
 #else
@@ -2862,7 +2875,7 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       /* that are local and are not descendant of the same super_hydro-cells */
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t2, t->ci, with_cooling);
-        scheduler_addunlock(sched, t2, t->ci->super->kick2);
+        scheduler_addunlock(sched, t2, t->ci->super->end_force);
       } else
         error("oo");
 #endif
@@ -2903,14 +2916,14 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t2, t3, t->ci,
                                              with_cooling);
-        scheduler_addunlock(sched, t3, t->ci->super->kick2);
+        scheduler_addunlock(sched, t3, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
           engine_make_hydro_loops_dependencies(sched, t, t2, t3, t->cj,
                                                with_cooling);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t3, t->cj->super->kick2);
+          scheduler_addunlock(sched, t3, t->cj->super->end_force);
       }
 
 #else
@@ -2927,14 +2940,14 @@ void engine_make_extra_hydroloop_tasks_mapper(void *map_data, int num_elements,
       /* that are local and are not descendant of the same super_hydro-cells */
       if (t->ci->nodeID == nodeID) {
         engine_make_hydro_loops_dependencies(sched, t, t2, t->ci, with_cooling);
-        scheduler_addunlock(sched, t2, t->ci->super->kick2);
+        scheduler_addunlock(sched, t2, t->ci->super->end_force);
       }
       if (t->cj->nodeID == nodeID) {
         if (t->ci->super_hydro != t->cj->super_hydro)
           engine_make_hydro_loops_dependencies(sched, t, t2, t->cj,
                                                with_cooling);
         if (t->ci->super != t->cj->super)
-          scheduler_addunlock(sched, t2, t->cj->super->kick2);
+          scheduler_addunlock(sched, t2, t->cj->super->end_force);
       }
 #endif
     }
@@ -2975,6 +2988,14 @@ void engine_maketasks(struct engine *e) {
 
   /* Split the tasks. */
   scheduler_splittasks(sched);
+
+#ifdef SWIFT_DEBUG_CHECKS
+  /* Verify that we are not left with invalid tasks */
+  for (int i = 0; i < e->sched.nr_tasks; ++i) {
+    const struct task *t = &e->sched.tasks[i];
+    if (t->ci == NULL && t->cj != NULL && !t->skip) error("Invalid task");
+  }
+#endif
 
   /* Free the old list of cell-task links. */
   if (e->links != NULL) free(e->links);
@@ -3406,7 +3427,14 @@ void engine_marktasks_mapper(void *map_data, int num_elements,
       }
     }
 
-    /* Kick/init ? */
+    /* End force ? */
+    else if (t->type == task_type_end_force) {
+
+      if (cell_is_active_hydro(t->ci, e) || cell_is_active_gravity(t->ci, e))
+        scheduler_activate(s, t);
+    }
+
+    /* Kick ? */
     else if (t->type == task_type_kick1 || t->type == task_type_kick2) {
 
       if (cell_is_active_hydro(t->ci, e) || cell_is_active_gravity(t->ci, e))
@@ -3543,7 +3571,7 @@ int engine_estimate_nr_tasks(struct engine *e) {
   int n1 = 0;
   int n2 = 0;
   if (e->policy & engine_policy_hydro) {
-    n1 += 36;
+    n1 += 37;
     n2 += 2;
 #ifdef WITH_MPI
     n1 += 6;
@@ -3701,10 +3729,11 @@ void engine_prepare(struct engine *e) {
 #ifdef SWIFT_DEBUG_CHECKS
   if (e->forcerepart || e->forcerebuild) {
     /* Check that all cells have been drifted to the current time.
-     * That can include cells that have not
-     * previously been active on this rank. */
-    space_check_drift_point(e->s, e->ti_old,
-                            e->policy & engine_policy_self_gravity);
+     * That can include cells that have not previously been active on this
+     * rank. Skip if haven't got any cells (yet). */
+    if (e->s->cells_top != NULL)
+      space_check_drift_point(e->s, e->ti_old,
+                              e->policy & engine_policy_self_gravity);
   }
 #endif
 
@@ -3717,7 +3746,7 @@ void engine_prepare(struct engine *e) {
   /* Unskip active tasks and check for rebuild */
   engine_unskip(e);
 
-  /* Re-rank the tasks every now and then. */
+  /* Re-rank the tasks every now and then. XXX this never executes. */
   if (e->tasks_age % engine_tasksreweight == 1) {
     scheduler_reweight(&e->sched, e->verbose);
   }
@@ -4035,7 +4064,7 @@ void engine_skip_force_and_kick(struct engine *e) {
     if (t->type == task_type_drift_part || t->type == task_type_drift_gpart ||
         t->type == task_type_kick1 || t->type == task_type_kick2 ||
         t->type == task_type_timestep || t->subtype == task_subtype_force ||
-        t->subtype == task_subtype_grav ||
+        t->subtype == task_subtype_grav || t->type == task_type_end_force ||
         t->type == task_type_grav_long_range ||
         t->type == task_type_grav_ghost_in ||
         t->type == task_type_grav_ghost_out ||
@@ -4109,6 +4138,25 @@ void engine_launch(struct engine *e) {
 }
 
 /**
+ * @brief Calls the 'first init' function on the particles of all types.
+ *
+ * @param e The #engine.
+ */
+void engine_first_init_particles(struct engine *e) {
+
+  const ticks tic = getticks();
+
+  /* Set the particles in a state where they are ready for a run */
+  space_first_init_parts(e->s, e->chemistry, e->cooling_func);
+  space_first_init_gparts(e->s, e->gravity_properties);
+  space_first_init_sparts(e->s);
+
+  if (e->verbose)
+    message("took %.3f %s.", clocks_from_ticks(getticks() - tic),
+            clocks_getunit());
+}
+
+/**
  * @brief Initialises the particles and set them in a state ready to move
  *forward in time.
  *
@@ -4126,14 +4174,11 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
   struct clocks_time time1, time2;
   clocks_gettime(&time1);
 
+  /* Start by setting the particles in a good state */
+  if (e->nodeID == 0) message("Setting particles to a valid state...");
+  engine_first_init_particles(e);
+
   if (e->nodeID == 0) message("Computing initial gas densities.");
-
-  /* Initialise the softening lengths */
-  if (e->policy & engine_policy_self_gravity) {
-
-    for (size_t i = 0; i < s->nr_gparts; ++i)
-      gravity_init_softening(&s->gparts[i], e->gravity_properties);
-  }
 
   /* Construct all cells and tasks to start everything */
   engine_rebuild(e, clean_h_values);
@@ -4208,7 +4253,9 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
   if (e->nodeID == 0) scheduler_write_dependencies(&e->sched, e->verbose);
 
   /* Run the 0th time-step */
+  TIMER_TIC2;
   engine_launch(e);
+  TIMER_TOC2(timer_runners);
 
 #ifdef SWIFT_GRAVITY_FORCE_CHECKS
   /* Check the accuracy of the gravity calculation */
@@ -4226,15 +4273,17 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
     /* Sorting should put the same positions next to each other... */
     int failed = 0;
     double *prev_x = s->parts[0].x;
+    long long *prev_id = &s->parts[0].id;
     for (size_t k = 1; k < s->nr_parts; k++) {
       if (prev_x[0] == s->parts[k].x[0] && prev_x[1] == s->parts[k].x[1] &&
           prev_x[2] == s->parts[k].x[2]) {
         if (e->verbose)
-          message("Two particles occupy location: %f %f %f", prev_x[0],
-                  prev_x[1], prev_x[2]);
+          message("Two particles occupy location: %f %f %f id=%lld id=%lld",
+                  prev_x[0], prev_x[1], prev_x[2], *prev_id, s->parts[k].id);
         failed++;
       }
       prev_x = s->parts[k].x;
+      prev_id = &s->parts[k].id;
     }
     if (failed > 0)
       error(
@@ -4395,7 +4444,7 @@ void engine_step(struct engine *e) {
     gravity_exact_force_check(e->s, e, 1e-1);
 #endif
 
-  /* Let's trigger a rebuild every-so-often for good measure */
+  /* Let's trigger a non-SPH rebuild every-so-often for good measure */
   if (!(e->policy & engine_policy_hydro) &&  // MATTHIEU improve this
       (e->policy & engine_policy_self_gravity) && e->step % 20 == 0)
     e->forcerebuild = 1;
@@ -4408,9 +4457,8 @@ void engine_step(struct engine *e) {
   e->forcerebuild = e->collect_group1.forcerebuild;
 
   /* Save some statistics ? */
-  if (e->time - e->timeLastStatistics >= e->deltaTimeStatistics) {
+  if (e->time - e->timeLastStatistics >= e->deltaTimeStatistics)
     e->save_stats = 1;
-  }
 
   /* Do we want a snapshot? */
   if (e->ti_end_min >= e->ti_nextSnapshot && e->ti_nextSnapshot > 0)
@@ -4418,8 +4466,9 @@ void engine_step(struct engine *e) {
 
   /* Drift everybody (i.e. what has not yet been drifted) */
   /* to the current time */
-  if (e->dump_snapshot || e->forcerebuild || e->forcerepart || e->save_stats)
-    engine_drift_all(e);
+  int drifted_all =
+      (e->dump_snapshot || e->forcerebuild || e->forcerepart || e->save_stats);
+  if (drifted_all) engine_drift_all(e);
 
   /* Write a snapshot ? */
   if (e->dump_snapshot) {
@@ -4459,6 +4508,48 @@ void engine_step(struct engine *e) {
   /* Time in ticks at the end of this step. */
   e->toc_step = getticks();
 #endif
+
+  /* Final job is to create a restart file if needed. */
+  engine_dump_restarts(e, drifted_all, e->restart_onexit && engine_is_done(e));
+}
+
+/**
+ * @brief dump restart files if it is time to do so and dumps are enabled.
+ *
+ * @param e the engine.
+ * @param drifted_all true if a drift_all has just been performed.
+ * @param force force a dump, if dumping is enabled.
+ */
+void engine_dump_restarts(struct engine *e, int drifted_all, int force) {
+
+  if (e->restart_dump) {
+    ticks tic = getticks();
+
+    /* Dump when the time has arrived, or we are told to. */
+    int dump = ((tic > e->restart_next) || force);
+
+#ifdef WITH_MPI
+    /* Synchronize this action from rank 0 (ticks may differ between
+     * machines). */
+    MPI_Bcast(&dump, 1, MPI_INT, 0, MPI_COMM_WORLD);
+#endif
+    if (dump) {
+
+      /* Drift all particles first (may have just been done). */
+      if (!drifted_all) engine_drift_all(e);
+      restart_write(e, e->restart_file);
+
+      if (e->verbose)
+        message("Dumping restart files took %.3f %s",
+                clocks_from_ticks(getticks() - tic), clocks_getunit());
+
+      /* Time after which next dump will occur. */
+      e->restart_next += e->restart_dt;
+
+      /* Flag that we dumped the restarts */
+      e->step_props |= engine_step_prop_restarts;
+    }
+  }
 }
 
 /**
@@ -4885,8 +4976,10 @@ void engine_split(struct engine *e, struct partition *initial_partition) {
       posix_memalign((void **)&xparts_new, xpart_align,
                      sizeof(struct xpart) * s->size_parts) != 0)
     error("Failed to allocate new part data.");
-  memcpy(parts_new, s->parts, sizeof(struct part) * s->nr_parts);
-  memcpy(xparts_new, s->xparts, sizeof(struct xpart) * s->nr_parts);
+  if (s->nr_parts > 0) {
+    memcpy(parts_new, s->parts, sizeof(struct part) * s->nr_parts);
+    memcpy(xparts_new, s->xparts, sizeof(struct xpart) * s->nr_parts);
+  }
   free(s->parts);
   free(s->xparts);
   s->parts = parts_new;
@@ -4905,7 +4998,8 @@ void engine_split(struct engine *e, struct partition *initial_partition) {
   if (posix_memalign((void **)&sparts_new, spart_align,
                      sizeof(struct spart) * s->size_sparts) != 0)
     error("Failed to allocate new spart data.");
-  memcpy(sparts_new, s->sparts, sizeof(struct spart) * s->nr_sparts);
+  if (s->nr_sparts > 0)
+    memcpy(sparts_new, s->sparts, sizeof(struct spart) * s->nr_sparts);
   free(s->sparts);
   s->sparts = sparts_new;
 
@@ -4922,7 +5016,8 @@ void engine_split(struct engine *e, struct partition *initial_partition) {
   if (posix_memalign((void **)&gparts_new, gpart_align,
                      sizeof(struct gpart) * s->size_gparts) != 0)
     error("Failed to allocate new gpart data.");
-  memcpy(gparts_new, s->gparts, sizeof(struct gpart) * s->nr_gparts);
+  if (s->nr_gparts > 0)
+    memcpy(gparts_new, s->gparts, sizeof(struct gpart) * s->nr_gparts);
   free(s->gparts);
   s->gparts = gparts_new;
 
@@ -5049,18 +5144,17 @@ void engine_unpin() {
 }
 
 /**
- * @brief init an engine with the given number of threads, queues, and
- *      the given policy.
+ * @brief init an engine struct with the necessary properties for the
+ *        simulation.
+ *
+ * Note do not use when restarting. Engine initialisation
+ * is completed by a call to engine_config().
  *
  * @param e The #engine.
  * @param s The #space in which this #runner will run.
  * @param params The parsed parameter file.
- * @param nr_nodes The number of MPI ranks.
- * @param nodeID The MPI rank of this node.
- * @param nr_threads The number of threads per MPI rank.
  * @param Ngas total number of gas particles in the simulation.
  * @param Ndm total number of gravity particles in the simulation.
- * @param with_aff use processor affinity, if supported.
  * @param policy The queuing policy to use.
  * @param verbose Is this #engine talkative ?
  * @param reparttype What type of repartition algorithm are we using ?
@@ -5070,42 +5164,31 @@ void engine_unpin() {
  * @param gravity The #gravity_props used for this run.
  * @param potential The properties of the external potential.
  * @param cooling_func The properties of the cooling function.
+ * @param chemistry The chemistry information.
  * @param sourceterms The properties of the source terms function.
  */
-void engine_init(struct engine *e, struct space *s,
-                 const struct swift_params *params, int nr_nodes, int nodeID,
-                 int nr_threads, long long Ngas, long long Ndm, int with_aff,
-                 int policy, int verbose, struct repartition *reparttype,
-                 const struct unit_system *internal_units,
-                 const struct phys_const *physical_constants,
-                 const struct hydro_props *hydro,
-                 const struct gravity_props *gravity,
-                 const struct external_potential *potential,
-                 const struct cooling_function_data *cooling_func,
-                 struct sourceterms *sourceterms) {
+void engine_init(
+    struct engine *e, struct space *s, const struct swift_params *params,
+    long long Ngas, long long Ndm, int policy, int verbose,
+    struct repartition *reparttype, const struct unit_system *internal_units,
+    const struct phys_const *physical_constants,
+    const struct hydro_props *hydro, const struct gravity_props *gravity,
+    const struct external_potential *potential,
+    const struct cooling_function_data *cooling_func,
+    const struct chemistry_data *chemistry, struct sourceterms *sourceterms) {
 
   /* Clean-up everything */
   bzero(e, sizeof(struct engine));
 
-  /* Store the values. */
+  /* Store the all values in the fields of the engine. */
   e->s = s;
-  e->nr_threads = nr_threads;
   e->policy = policy;
   e->step = 0;
-  e->nr_nodes = nr_nodes;
-  e->nodeID = nodeID;
   e->total_nr_parts = Ngas;
   e->total_nr_gparts = Ndm;
   e->proxy_ind = NULL;
   e->nr_proxies = 0;
-  e->forcerebuild = 1;
-  e->forcerepart = 0;
   e->reparttype = reparttype;
-  e->dump_snapshot = 0;
-  e->save_stats = 0;
-  e->step_props = engine_step_prop_none;
-  e->links = NULL;
-  e->nr_links = 0;
   e->timeBegin = parser_get_param_double(params, "TimeIntegration:time_begin");
   e->timeEnd = parser_get_param_double(params, "TimeIntegration:time_end");
   e->timeOld = e->timeBegin;
@@ -5127,10 +5210,9 @@ void engine_init(struct engine *e, struct space *s,
       parser_get_opt_param_int(params, "Snapshots:compression", 0);
   e->snapshotUnits = malloc(sizeof(struct unit_system));
   units_init_default(e->snapshotUnits, params, "Snapshots", internal_units);
+  e->snapshotOutputCount = 0;
   e->dt_min = parser_get_param_double(params, "TimeIntegration:dt_min");
   e->dt_max = parser_get_param_double(params, "TimeIntegration:dt_max");
-  e->file_stats = NULL;
-  e->file_timesteps = NULL;
   e->deltaTimeStatistics =
       parser_get_param_double(params, "Statistics:delta_time");
   e->timeLastStatistics = 0;
@@ -5142,16 +5224,73 @@ void engine_init(struct engine *e, struct space *s,
   e->gravity_properties = gravity;
   e->external_potential = potential;
   e->cooling_func = cooling_func;
+  e->chemistry = chemistry;
   e->sourceterms = sourceterms;
   e->parameter_file = params;
 #ifdef WITH_MPI
   e->cputime_last_step = 0;
   e->last_repartition = 0;
 #endif
-  engine_rank = nodeID;
 
   /* Make the space link back to the engine. */
   s->e = e;
+
+  /* Setup the timestep */
+  e->timeBase = (e->timeEnd - e->timeBegin) / max_nr_timesteps;
+  e->timeBase_inv = 1.0 / e->timeBase;
+  e->ti_current = 0;
+}
+
+/**
+ * @brief configure an engine with the given number of threads, queues
+ *        and core affinity. Also initialises the scheduler and opens various
+ *        output files, computes the next timestep and initialises the
+ *        threadpool.
+ *
+ * Assumes the engine is correctly initialised i.e. is restored from a restart
+ * file or has been setup by engine_init(). When restarting any output log
+ * files are positioned so that further output is appended. Note that
+ * parameters are not read from the engine, just the parameter file, this
+ * allows values derived in this function to be changed between runs.
+ * When not restarting params should be the same as given to engine_init().
+ *
+ * @param restart true when restarting the application.
+ * @param e The #engine.
+ * @param params The parsed parameter file.
+ * @param nr_nodes The number of MPI ranks.
+ * @param nodeID The MPI rank of this node.
+ * @param nr_threads The number of threads per MPI rank.
+ * @param with_aff use processor affinity, if supported.
+ * @param verbose Is this #engine talkative ?
+ * @param restart_file The name of our restart file.
+ */
+void engine_config(int restart, struct engine *e,
+                   const struct swift_params *params, int nr_nodes, int nodeID,
+                   int nr_threads, int with_aff, int verbose,
+                   const char *restart_file) {
+
+  /* Store the values and initialise global fields. */
+  e->nodeID = nodeID;
+  e->nr_threads = nr_threads;
+  e->nr_nodes = nr_nodes;
+  e->proxy_ind = NULL;
+  e->nr_proxies = 0;
+  e->forcerebuild = 1;
+  e->forcerepart = 0;
+  e->dump_snapshot = 0;
+  e->save_stats = 0;
+  e->step_props = engine_step_prop_none;
+  e->links = NULL;
+  e->nr_links = 0;
+  e->file_stats = NULL;
+  e->file_timesteps = NULL;
+  e->verbose = verbose;
+  e->wallclock_time = 0.f;
+  e->restart_dump = 0;
+  e->restart_file = restart_file;
+  e->restart_next = 0;
+  e->restart_dt = 0;
+  engine_rank = nodeID;
 
   /* Get the number of queues */
   int nr_queues =
@@ -5159,7 +5298,7 @@ void engine_init(struct engine *e, struct space *s,
   if (nr_queues <= 0) nr_queues = e->nr_threads;
   if (nr_queues != nr_threads)
     message("Number of task queues set to %d", nr_queues);
-  s->nr_queues = nr_queues;
+  e->s->nr_queues = nr_queues;
 
 /* Deal with affinity. For now, just figure out the number of cores. */
 #if defined(HAVE_SETAFFINITY)
@@ -5197,7 +5336,7 @@ void engine_init(struct engine *e, struct space *s,
     }
 
 #if defined(HAVE_LIBNUMA) && defined(_GNU_SOURCE)
-    if ((policy & engine_policy_cputight) != engine_policy_cputight) {
+    if ((e->policy & engine_policy_cputight) != engine_policy_cputight) {
 
       if (numa_available() >= 0) {
         if (nodeID == 0) message("prefer NUMA-distant CPUs");
@@ -5293,19 +5432,31 @@ void engine_init(struct engine *e, struct space *s,
 
   /* Open some files */
   if (e->nodeID == 0) {
+
+    /* When restarting append to these files. */
+    char *mode;
+    if (restart)
+      mode = "a";
+    else
+      mode = "w";
+
     char energyfileName[200] = "";
     parser_get_opt_param_string(params, "Statistics:energy_file_name",
                                 energyfileName,
                                 engine_default_energy_file_name);
     sprintf(energyfileName + strlen(energyfileName), ".txt");
-    e->file_stats = fopen(energyfileName, "w");
-    fprintf(e->file_stats,
-            "#%14s %14s %14s %14s %14s %14s %14s %14s %14s %14s %14s %14s %14s "
-            "%14s %14s %14s %14s %14s %14s\n",
-            "Time", "Mass", "E_tot", "E_kin", "E_int", "E_pot", "E_pot_self",
-            "E_pot_ext", "E_radcool", "Entropy", "p_x", "p_y", "p_z", "ang_x",
-            "ang_y", "ang_z", "com_x", "com_y", "com_z");
-    fflush(e->file_stats);
+    e->file_stats = fopen(energyfileName, mode);
+
+    if (!restart) {
+      fprintf(
+          e->file_stats,
+          "#%14s %14s %14s %14s %14s %14s %14s %14s %14s %14s %14s %14s %14s "
+          "%14s %14s %14s %14s %14s %14s\n",
+          "Time", "Mass", "E_tot", "E_kin", "E_int", "E_pot", "E_pot_self",
+          "E_pot_ext", "E_radcool", "Entropy", "p_x", "p_y", "p_z", "ang_x",
+          "ang_y", "ang_z", "com_x", "com_y", "com_z");
+      fflush(e->file_stats);
+    }
 
     char timestepsfileName[200] = "";
     parser_get_opt_param_string(params, "Statistics:timestep_file_name",
@@ -5314,30 +5465,35 @@ void engine_init(struct engine *e, struct space *s,
 
     sprintf(timestepsfileName + strlen(timestepsfileName), "_%d.txt",
             nr_nodes * nr_threads);
-    e->file_timesteps = fopen(timestepsfileName, "w");
-    fprintf(e->file_timesteps,
-            "# Host: %s\n# Branch: %s\n# Revision: %s\n# Compiler: %s, "
-            "Version: %s \n# "
-            "Number of threads: %d\n# Number of MPI ranks: %d\n# Hydrodynamic "
-            "scheme: %s\n# Hydrodynamic kernel: %s\n# No. of neighbours: %.2f "
-            "+/- %.4f\n# Eta: %f\n",
-            hostname(), git_branch(), git_revision(), compiler_name(),
-            compiler_version(), e->nr_threads, e->nr_nodes, SPH_IMPLEMENTATION,
-            kernel_name, e->hydro_properties->target_neighbours,
-            e->hydro_properties->delta_neighbours,
-            e->hydro_properties->eta_neighbours);
+    e->file_timesteps = fopen(timestepsfileName, mode);
 
-    fprintf(e->file_timesteps,
-            "# Step Properties: Rebuild=%d, Redistribute=%d, Repartition=%d, "
-            "Statistics=%d, Snapshot=%d\n",
-            engine_step_prop_rebuild, engine_step_prop_redistribute,
-            engine_step_prop_repartition, engine_step_prop_statistics,
-            engine_step_prop_snapshot);
+    if (!restart) {
+      fprintf(
+          e->file_timesteps,
+          "# Host: %s\n# Branch: %s\n# Revision: %s\n# Compiler: %s, "
+          "Version: %s \n# "
+          "Number of threads: %d\n# Number of MPI ranks: %d\n# Hydrodynamic "
+          "scheme: %s\n# Hydrodynamic kernel: %s\n# No. of neighbours: %.2f "
+          "+/- %.4f\n# Eta: %f\n",
+          hostname(), git_branch(), git_revision(), compiler_name(),
+          compiler_version(), e->nr_threads, e->nr_nodes, SPH_IMPLEMENTATION,
+          kernel_name, e->hydro_properties->target_neighbours,
+          e->hydro_properties->delta_neighbours,
+          e->hydro_properties->eta_neighbours);
 
-    fprintf(e->file_timesteps, "# %6s %14s %14s %12s %12s %12s %16s [%s] %6s\n",
-            "Step", "Time", "Time-step", "Updates", "g-Updates", "s-Updates",
-            "Wall-clock time", clocks_getunit(), "Props");
-    fflush(e->file_timesteps);
+      fprintf(e->file_timesteps,
+              "# Step Properties: Rebuild=%d, Redistribute=%d, Repartition=%d, "
+              "Statistics=%d, Snapshot=%d, Restarts=%d\n",
+              engine_step_prop_rebuild, engine_step_prop_redistribute,
+              engine_step_prop_repartition, engine_step_prop_statistics,
+              engine_step_prop_snapshot, engine_step_prop_restarts);
+
+      fprintf(e->file_timesteps,
+              "# %6s %14s %14s %12s %12s %12s %16s [%s] %6s\n", "Step", "Time",
+              "Time-step", "Updates", "g-Updates", "s-Updates",
+              "Wall-clock time", clocks_getunit(), "Props");
+      fflush(e->file_timesteps);
+    }
   }
 
   /* Print policy */
@@ -5366,9 +5522,11 @@ void engine_init(struct engine *e, struct space *s,
         e->dt_min, e->dt_max);
 
   /* Deal with timestep */
-  e->timeBase = (e->timeEnd - e->timeBegin) / max_nr_timesteps;
-  e->timeBase_inv = 1.0 / e->timeBase;
-  e->ti_current = 0;
+  if (!restart) {
+    e->timeBase = (e->timeEnd - e->timeBegin) / max_nr_timesteps;
+    e->timeBase_inv = 1.0 / e->timeBase;
+    e->ti_current = 0;
+  }
 
   /* Info about time-steps */
   if (e->nodeID == 0) {
@@ -5408,6 +5566,34 @@ void engine_init(struct engine *e, struct space *s,
   /* Find the time of the first output */
   engine_compute_next_snapshot_time(e);
 
+  /* Whether restarts are enabled. Yes by default. Can be changed on restart. */
+  e->restart_dump = parser_get_opt_param_int(params, "Restarts:enable", 1);
+
+  /* Whether restarts should be dumped on exit. Not by default. Can be changed
+   * on restart. */
+  e->restart_onexit = parser_get_opt_param_int(params, "Restarts:onexit", 0);
+
+  /* Hours between restart dumps. Can be changed on restart. */
+  float dhours =
+      parser_get_opt_param_float(params, "Restarts:delta_hours", 6.0);
+  if (e->nodeID == 0) {
+    if (e->restart_dump)
+      message("Restarts will be dumped every %f hours", dhours);
+    else
+      message("WARNING: restarts will not be dumped");
+
+    if (e->verbose && e->restart_onexit)
+      message("Restarts will be dumped after the final step");
+  }
+
+  /* Internally we use ticks, so convert into a delta ticks. Assumes we can
+   * convert from ticks into milliseconds. */
+  e->restart_dt = clocks_to_ticks(dhours * 60.0 * 60.0 * 1000.0);
+
+  /* The first dump will happen no sooner than restart_dt ticks in the
+   * future. */
+  e->restart_next = getticks() + e->restart_dt;
+
 /* Construct types for MPI communications */
 #ifdef WITH_MPI
   part_create_mpi_types();
@@ -5427,23 +5613,31 @@ void engine_init(struct engine *e, struct space *s,
 
   /* Expected average for tasks per cell. If set to zero we use a heuristic
    * guess based on the numbers of cells and how many tasks per cell we expect.
+   * On restart this number cannot be estimated (no cells yet), so we recover
+   * from the end of the dumped run. Can be changed on restart.
    */
   e->tasks_per_cell =
       parser_get_opt_param_int(params, "Scheduler:tasks_per_cell", 0);
+  int maxtasks = 0;
+  if (restart)
+    maxtasks = e->restart_max_tasks;
+  else
+    maxtasks = engine_estimate_nr_tasks(e);
 
   /* Init the scheduler. */
-  scheduler_init(&e->sched, e->s, engine_estimate_nr_tasks(e), nr_queues,
-                 (policy & scheduler_flag_steal), e->nodeID, &e->threadpool);
+  scheduler_init(&e->sched, e->s, maxtasks, nr_queues,
+                 (e->policy & scheduler_flag_steal), e->nodeID, &e->threadpool);
 
   /* Maximum size of MPI task messages, in KB, that should not be buffered,
-   * that is sent using MPI_Issend, not MPI_Isend. 4Mb by default.
+   * that is sent using MPI_Issend, not MPI_Isend. 4Mb by default. Can be
+   * changed on restart.
    */
   e->sched.mpi_message_limit =
       parser_get_opt_param_int(params, "Scheduler:mpi_message_limit", 4) * 1024;
 
   /* Allocate and init the threads. */
-  if ((e->runners = (struct runner *)malloc(sizeof(struct runner) *
-                                            e->nr_threads)) == NULL)
+  if (posix_memalign((void **)&e->runners, SWIFT_CACHE_ALIGNMENT,
+                     e->nr_threads * sizeof(struct runner)) != 0)
     error("Failed to allocate threads array.");
   for (int k = 0; k < e->nr_threads; k++) {
     e->runners[k].id = k;
@@ -5592,4 +5786,114 @@ void engine_clean(struct engine *e) {
   scheduler_clean(&e->sched);
   space_clean(e->s);
   threadpool_clean(&e->threadpool);
+}
+
+/**
+ * @brief Write the engine struct and its contents to the given FILE as a
+ * stream of bytes.
+ *
+ * @param e the engine
+ * @param stream the file stream
+ */
+void engine_struct_dump(struct engine *e, FILE *stream) {
+
+  /* Dump the engine. Save the current tasks_per_cell estimate. */
+  e->restart_max_tasks = engine_estimate_nr_tasks(e);
+  restart_write_blocks(e, sizeof(struct engine), 1, stream, "engine",
+                       "engine struct");
+
+  /* And all the engine pointed data, these use their own dump functions. */
+  space_struct_dump(e->s, stream);
+  units_struct_dump(e->internal_units, stream);
+  units_struct_dump(e->snapshotUnits, stream);
+
+#ifdef WITH_MPI
+  /* Save the partition for restoration. */
+  partition_store_celllist(e->s, e->reparttype);
+  partition_struct_dump(e->reparttype, stream);
+#endif
+
+  phys_const_struct_dump(e->physical_constants, stream);
+  hydro_props_struct_dump(e->hydro_properties, stream);
+  gravity_props_struct_dump(e->gravity_properties, stream);
+  potential_struct_dump(e->external_potential, stream);
+  cooling_struct_dump(e->cooling_func, stream);
+  sourceterms_struct_dump(e->sourceterms, stream);
+  parser_struct_dump(e->parameter_file, stream);
+}
+
+/**
+ * @brief Re-create an engine struct and its contents from the given FILE
+ *        stream.
+ *
+ * @param e the engine
+ * @param stream the file stream
+ */
+void engine_struct_restore(struct engine *e, FILE *stream) {
+
+  /* Read the engine. */
+  restart_read_blocks(e, sizeof(struct engine), 1, stream, NULL,
+                      "engine struct");
+
+  /* Re-initializations as necessary for our struct and its members. */
+  e->sched.tasks = NULL;
+  e->sched.tasks_ind = NULL;
+  e->sched.tid_active = NULL;
+  e->sched.size = 0;
+
+  /* Now for the other pointers, these use their own restore functions. */
+  /* Note all this memory leaks, but is used once. */
+  struct space *s = malloc(sizeof(struct space));
+  space_struct_restore(s, stream);
+  e->s = s;
+  s->e = e;
+
+  struct unit_system *us = malloc(sizeof(struct unit_system));
+  units_struct_restore(us, stream);
+  e->internal_units = us;
+
+  us = malloc(sizeof(struct unit_system));
+  units_struct_restore(us, stream);
+  e->snapshotUnits = us;
+
+#ifdef WITH_MPI
+  struct repartition *reparttype = malloc(sizeof(struct repartition));
+  partition_struct_restore(reparttype, stream);
+  e->reparttype = reparttype;
+#endif
+
+  struct phys_const *physical_constants = malloc(sizeof(struct phys_const));
+  phys_const_struct_restore(physical_constants, stream);
+  e->physical_constants = physical_constants;
+
+  struct hydro_props *hydro_properties = malloc(sizeof(struct hydro_props));
+  hydro_props_struct_restore(hydro_properties, stream);
+  e->hydro_properties = hydro_properties;
+
+  struct gravity_props *gravity_properties =
+      malloc(sizeof(struct gravity_props));
+  gravity_props_struct_restore(gravity_properties, stream);
+  e->gravity_properties = gravity_properties;
+
+  struct external_potential *external_potential =
+      malloc(sizeof(struct external_potential));
+  potential_struct_restore(external_potential, stream);
+  e->external_potential = external_potential;
+
+  struct cooling_function_data *cooling_func =
+      malloc(sizeof(struct cooling_function_data));
+  cooling_struct_restore(cooling_func, stream);
+  e->cooling_func = cooling_func;
+
+  struct sourceterms *sourceterms = malloc(sizeof(struct sourceterms));
+  sourceterms_struct_restore(sourceterms, stream);
+  e->sourceterms = sourceterms;
+
+  struct swift_params *parameter_file = malloc(sizeof(struct swift_params));
+  parser_struct_restore(parameter_file, stream);
+  e->parameter_file = parameter_file;
+
+  /* Want to force a rebuild before using this engine. Wait to repartition.*/
+  e->forcerebuild = 1;
+  e->forcerepart = 0;
 }

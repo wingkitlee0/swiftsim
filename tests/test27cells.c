@@ -33,19 +33,24 @@
 #if defined(WITH_VECTORIZATION)
 #define DOSELF1 runner_doself1_density_vec
 #define DOSELF1_SUBSET runner_doself_subset_density_vec
+#define DOPAIR1_SUBSET runner_dopair_subset_branch_density
 #define DOPAIR1 runner_dopair1_branch_density
-#ifdef DOSELF_SUBSET
+#ifdef TEST_DOSELF_SUBSET
 #define DOSELF1_NAME "runner_doself_subset_density_vec"
 #else
 #define DOSELF1_NAME "runner_doself_density_vec"
 #endif
-#define DOPAIR1_NAME "runner_dopair1_density_vec"
+#ifdef TEST_DOPAIR_SUBSET
+#define DOPAIR1_NAME "runner_dopair_subset_branch_density"
+#else
+#define DOPAIR1_NAME "runner_dopair_density_vec"
+#endif
 #endif
 
 #ifndef DOSELF1
 #define DOSELF1 runner_doself1_density
 #define DOSELF1_SUBSET runner_doself_subset_density
-#ifdef DOSELF_SUBSET
+#ifdef TEST_DOSELF_SUBSET
 #define DOSELF1_NAME "runner_doself1_subset_density"
 #else
 #define DOSELF1_NAME "runner_doself1_density"
@@ -54,8 +59,15 @@
 
 #ifndef DOPAIR1
 #define DOPAIR1 runner_dopair1_branch_density
+#define DOPAIR1_SUBSET runner_dopair_subset_branch_density
+#ifdef TEST_DOPAIR_SUBSET
+#define DOPAIR1_NAME "runner_dopair1_subset_branch_density"
+#else
 #define DOPAIR1_NAME "runner_dopair1_density"
 #endif
+#endif
+
+#define NODE_ID 1
 
 enum velocity_types {
   velocity_zero,
@@ -184,6 +196,7 @@ struct cell *make_cell(size_t n, double *offset, double size, double h,
   cell->ti_old_part = 8;
   cell->ti_hydro_end_min = 8;
   cell->ti_hydro_end_max = 8;
+  cell->nodeID = NODE_ID;
 
   shuffle_particles(cell->parts, cell->count);
 
@@ -313,10 +326,19 @@ void runner_dopair1_branch_density(struct runner *r, struct cell *ci,
 void runner_doself_subset_density(struct runner *r, struct cell *restrict ci,
                                   struct part *restrict parts,
                                   int *restrict ind, int count);
+void runner_dopair_subset_density(struct runner *r, struct cell *restrict ci,
+                                  struct part *restrict parts_i,
+                                  int *restrict ind, int count,
+                                  struct cell *restrict cj);
 void runner_doself_subset_density_vec(struct runner *r,
                                       struct cell *restrict ci,
                                       struct part *restrict parts,
                                       int *restrict ind, int count);
+void runner_dopair_subset_branch_density(struct runner *r,
+                                         struct cell *restrict ci,
+                                         struct part *restrict parts_i,
+                                         int *restrict ind, int count,
+                                         struct cell *restrict cj);
 
 /* And go... */
 int main(int argc, char *argv[]) {
@@ -431,6 +453,7 @@ int main(int argc, char *argv[]) {
   engine.ti_current = 8;
   engine.max_active_bin = num_time_bins;
   engine.hydro_properties = &hp;
+  engine.nodeID = NODE_ID;
 
   struct runner runner;
   runner.e = &engine;
@@ -476,18 +499,7 @@ int main(int argc, char *argv[]) {
     cache_init(&runner.cj_cache, 512);
 #endif
 
-    /* Run all the pairs */
-    for (int j = 0; j < 27; ++j) {
-      if (cells[j] != main_cell) {
-        const ticks sub_tic = getticks();
-
-        DOPAIR1(&runner, main_cell, cells[j]);
-
-        timings[j] += getticks() - sub_tic;
-      }
-    }
-
-#ifdef DOSELF_SUBSET
+#if defined(TEST_DOSELF_SUBSET) || defined(TEST_DOPAIR_SUBSET)
     int *pid = NULL;
     int count = 0;
     if ((pid = malloc(sizeof(int) * main_cell->count)) == NULL)
@@ -499,10 +511,26 @@ int main(int argc, char *argv[]) {
       }
 #endif
 
+    /* Run all the pairs */
+    for (int j = 0; j < 27; ++j) {
+      if (cells[j] != main_cell) {
+        const ticks sub_tic = getticks();
+
+#ifdef TEST_DOPAIR_SUBSET
+        DOPAIR1_SUBSET(&runner, main_cell, main_cell->parts, pid, count,
+                       cells[j]);
+#else
+        DOPAIR1(&runner, main_cell, cells[j]);
+#endif
+
+        timings[j] += getticks() - sub_tic;
+      }
+    }
+
     /* And now the self-interaction */
     const ticks self_tic = getticks();
 
-#ifdef DOSELF_SUBSET
+#ifdef TEST_DOSELF_SUBSET
     DOSELF1_SUBSET(&runner, main_cell, main_cell->parts, pid, count);
 #else
     DOSELF1(&runner, main_cell);

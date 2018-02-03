@@ -36,7 +36,9 @@
 #include "parallel_io.h"
 
 /* Local includes. */
+#include "chemistry_io.h"
 #include "common_io.h"
+#include "cooling.h"
 #include "dimension.h"
 #include "engine.h"
 #include "error.h"
@@ -51,11 +53,11 @@
 #include "units.h"
 #include "xmf.h"
 
-/* Are we timing the i/o? */
-//#define IO_SPEED_MEASUREMENT
-
 /* The current limit of ROMIO (the underlying MPI-IO layer) is 2GB */
 #define HDF5_PARALLEL_IO_MAX_BYTES 2000000000LL
+
+/* Are we timing the i/o? */
+//#define IO_SPEED_MEASUREMENT
 
 /**
  * @brief Reads a chunk of data from an open HDF5 dataset
@@ -210,7 +212,8 @@ void readArray(hid_t grp, struct io_props props, size_t N, long long N_total,
     /* Compute how many items are left */
     if (N > max_chunk_size) {
       N -= max_chunk_size;
-      props.field += max_chunk_size * props.partSize;
+      props.field += max_chunk_size * props.partSize; /* char* on the field */
+      props.parts += max_chunk_size;                  /* part* on the part */
       offset += max_chunk_size;
       redo = 1;
     } else {
@@ -264,7 +267,7 @@ void writeArray_chunk(struct engine* e, hid_t h_data, hid_t h_plist_id,
   /* message("Writing '%s' array...", props.name); */
 
   /* Allocate temporary buffer */
-  void* temp = malloc(num_elements * typeSize);
+  void* temp = NULL;
   if (posix_memalign((void**)&temp, IO_BUFFER_ALIGNMENT,
                      num_elements * typeSize) != 0)
     error("Unable to allocate temporary i/o buffer");
@@ -461,7 +464,8 @@ void writeArray(struct engine* e, hid_t grp, char* fileName, FILE* xmfFile,
     /* Compute how many items are left */
     if (N > max_chunk_size) {
       N -= max_chunk_size;
-      props.field += max_chunk_size * props.partSize;
+      props.field += max_chunk_size * props.partSize; /* char* on the field */
+      props.parts += max_chunk_size;                  /* part* on the part */
       offset += max_chunk_size;
       redo = 1;
     } else {
@@ -530,6 +534,7 @@ void writeArray(struct engine* e, hid_t grp, char* fileName, FILE* xmfFile,
  * @param mpi_size The number of MPI ranks
  * @param comm The MPI communicator
  * @param info The MPI information object
+ * @param n_threads The number of threads to use for local operations.
  * @param dry_run If 1, don't read the particle. Only allocates the arrays.
  *
  */
@@ -539,7 +544,7 @@ void read_ic_parallel(char* fileName, const struct unit_system* internal_units,
                       size_t* Nstars, int* periodic, int* flag_entropy,
                       int with_hydro, int with_gravity, int with_stars,
                       int mpi_rank, int mpi_size, MPI_Comm comm, MPI_Info info,
-                      int dry_run) {
+                      int n_threads, int dry_run) {
 
   hid_t h_file = 0, h_grp = 0;
   /* GADGET has only cubic boxes (in cosmological mode) */
@@ -726,6 +731,7 @@ void read_ic_parallel(char* fileName, const struct unit_system* internal_units,
         if (with_hydro) {
           Nparticles = *Ngas;
           hydro_read_particles(*parts, list, &num_fields);
+          num_fields += chemistry_read_particles(*parts, list + num_fields);
         }
         break;
 
@@ -759,16 +765,24 @@ void read_ic_parallel(char* fileName, const struct unit_system* internal_units,
     H5Gclose(h_grp);
   }
 
-  /* Prepare the DM particles */
-  if (!dry_run && with_gravity) io_prepare_dm_gparts(*gparts, Ndm);
+  if (!dry_run && with_gravity) {
 
-  /* Duplicate the hydro particles into gparts */
-  if (!dry_run && with_gravity && with_hydro)
-    io_duplicate_hydro_gparts(*parts, *gparts, *Ngas, Ndm);
+    /* Let's initialise a bit of thread parallelism here */
+    struct threadpool tp;
+    threadpool_init(&tp, n_threads);
 
-  /* Duplicate the star particles into gparts */
-  if (!dry_run && with_gravity && with_stars)
-    io_duplicate_star_gparts(*sparts, *gparts, *Nstars, Ndm + *Ngas);
+    /* Prepare the DM particles */
+    io_prepare_dm_gparts(&tp, *gparts, Ndm);
+
+    /* Duplicate the hydro particles into gparts */
+    if (with_hydro) io_duplicate_hydro_gparts(&tp, *parts, *gparts, *Ngas, Ndm);
+
+    /* Duplicate the star particles into gparts */
+    if (with_stars)
+      io_duplicate_star_gparts(&tp, *sparts, *gparts, *Nstars, Ndm + *Ngas);
+
+    threadpool_clean(&tp);
+  }
 
   /* message("Done Reading particles..."); */
 
@@ -819,7 +833,6 @@ void write_output_parallel(struct engine* e, const char* baseName,
   struct gpart* gparts = e->s->gparts;
   struct gpart* dmparts = NULL;
   struct spart* sparts = e->s->sparts;
-  static int outputCount = 0;
   FILE* xmfFile = 0;
 
   /* Number of unassociated gparts */
@@ -828,10 +841,10 @@ void write_output_parallel(struct engine* e, const char* baseName,
   /* File name */
   char fileName[FILENAME_BUFFER_SIZE];
   snprintf(fileName, FILENAME_BUFFER_SIZE, "%s_%04i.hdf5", baseName,
-           outputCount);
+           e->snapshotOutputCount);
 
   /* First time, we need to create the XMF file */
-  if (outputCount == 0 && mpi_rank == 0) xmf_create_file(baseName);
+  if (e->snapshotOutputCount == 0 && mpi_rank == 0) xmf_create_file(baseName);
 
   /* Prepare the XMF file for the new entry */
   if (mpi_rank == 0) xmfFile = xmf_prepare_file(baseName);
@@ -865,6 +878,14 @@ void write_output_parallel(struct engine* e, const char* baseName,
   h_err = H5Pset_mdc_config(plist_id, &mdc_config);
   if (h_err < 0) error("Error setting the MDC config");
 
+/* Use parallel meta-data writes */
+#if H5_VERSION_GE(1, 10, 0)
+  h_err = H5Pset_all_coll_metadata_ops(plist_id, 1);
+  if (h_err < 0) error("Error setting collective meta-data on all ops");
+  h_err = H5Pset_coll_metadata_write(plist_id, 1);
+  if (h_err < 0) error("Error setting collective meta-data writes");
+#endif
+
   /* Open HDF5 file with the chosen parameters */
   h_file = H5Fcreate(fileName, H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
   if (h_file < 0) {
@@ -889,6 +910,11 @@ void write_output_parallel(struct engine* e, const char* baseName,
   /* Write the part of the XMF file corresponding to this
    * specific output */
   if (mpi_rank == 0) xmf_write_outputheader(xmfFile, fileName, e->time);
+
+#ifdef IO_SPEED_MEASUREMENT
+  MPI_Barrier(MPI_COMM_WORLD);
+  ticks tic = getticks();
+#endif
 
   /* Open header to write simulation properties */
   /* message("Writing runtime parameters..."); */
@@ -948,9 +974,17 @@ void write_output_parallel(struct engine* e, const char* baseName,
                       H5P_DEFAULT);
     if (h_grp < 0) error("Error while creating SPH group");
     hydro_props_print_snapshot(h_grp, e->hydro_properties);
-    writeSPHflavour(h_grp);
+    hydro_write_flavour(h_grp);
     H5Gclose(h_grp);
   }
+
+  /* Print the subgrid parameters */
+  h_grp = H5Gcreate(h_file, "/SubgridScheme", H5P_DEFAULT, H5P_DEFAULT,
+                    H5P_DEFAULT);
+  if (h_grp < 0) error("Error while creating subgrid group");
+  cooling_write_flavour(h_grp);
+  chemistry_write_flavour(h_grp);
+  H5Gclose(h_grp);
 
   /* Print the gravity parameters */
   if (e->policy & engine_policy_self_gravity) {
@@ -973,6 +1007,15 @@ void write_output_parallel(struct engine* e, const char* baseName,
 
   /* Print the system of Units used internally */
   io_write_unit_system(h_file, internal_units, "InternalCodeUnits");
+
+#ifdef IO_SPEED_MEASUREMENT
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (engine_rank == 0)
+    message("Writing HDF5 header took %.3f %s.",
+            clocks_from_ticks(getticks() - tic), clocks_getunit());
+
+  tic = getticks();
+#endif
 
   /* Tell the user if a conversion will be needed */
   if (e->verbose && mpi_rank == 0) {
@@ -1039,6 +1082,7 @@ void write_output_parallel(struct engine* e, const char* baseName,
       case swift_type_gas:
         Nparticles = Ngas;
         hydro_write_particles(parts, list, &num_fields);
+        num_fields += chemistry_write_particles(parts, list + num_fields);
         break;
 
       case swift_type_dark_matter:
@@ -1079,25 +1123,77 @@ void write_output_parallel(struct engine* e, const char* baseName,
       dmparts = 0;
     }
 
+#ifdef IO_SPEED_MEASUREMENT
+    MPI_Barrier(MPI_COMM_WORLD);
+    tic = getticks();
+#endif
+
     /* Close particle group */
     H5Gclose(h_grp);
 
+#ifdef IO_SPEED_MEASUREMENT
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (engine_rank == 0)
+      message("Closing particle group took %.3f %s.",
+              clocks_from_ticks(getticks() - tic), clocks_getunit());
+
+    tic = getticks();
+#endif
+
     /* Close this particle group in the XMF file as well */
     if (mpi_rank == 0) xmf_write_groupfooter(xmfFile, (enum part_type)ptype);
+
+#ifdef IO_SPEED_MEASUREMENT
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (engine_rank == 0)
+      message("Writing XMF group footer took %.3f %s.",
+              clocks_from_ticks(getticks() - tic), clocks_getunit());
+#endif
   }
 
+#ifdef IO_SPEED_MEASUREMENT
+  MPI_Barrier(MPI_COMM_WORLD);
+  tic = getticks();
+#endif
+
   /* Write LXMF file descriptor */
-  if (mpi_rank == 0) xmf_write_outputfooter(xmfFile, outputCount, e->time);
+  if (mpi_rank == 0)
+    xmf_write_outputfooter(xmfFile, e->snapshotOutputCount, e->time);
+
+#ifdef IO_SPEED_MEASUREMENT
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (engine_rank == 0)
+    message("Writing XMF output footer took %.3f %s.",
+            clocks_from_ticks(getticks() - tic), clocks_getunit());
+
+  tic = getticks();
+#endif
 
   /* message("Done writing particles..."); */
 
   /* Close property descriptor */
   H5Pclose(plist_id);
 
+#ifdef IO_SPEED_MEASUREMENT
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (engine_rank == 0)
+    message("Closing property descriptor took %.3f %s.",
+            clocks_from_ticks(getticks() - tic), clocks_getunit());
+
+  tic = getticks();
+#endif
+
   /* Close file */
   H5Fclose(h_file);
 
-  ++outputCount;
+#ifdef IO_SPEED_MEASUREMENT
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (engine_rank == 0)
+    message("Closing file took %.3f %s.", clocks_from_ticks(getticks() - tic),
+            clocks_getunit());
+#endif
+
+  e->snapshotOutputCount++;
 }
 
 #endif /* HAVE_HDF5 */
