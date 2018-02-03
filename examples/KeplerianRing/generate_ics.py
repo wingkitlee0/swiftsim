@@ -263,12 +263,18 @@ class Particles(object):
                     (self.positions - np.array(center)).T
                 )
             ).T
-        ).astype(np.float128) + np.array(center)
-        
-        self.wiggle_positions()
-        self.convert_cartesian_to_polar(center)
+        ) + np.array(center)
 
-        self.calculate_velocities(angle=angle_radians)
+        self.velocities = (
+            (
+                np.matmul(
+                    rotation_matrix,
+                    (self.velocities).T
+                )
+            ).T
+        )
+        
+        self.convert_cartesian_to_polar(center)
 
         return
 
@@ -528,7 +534,6 @@ def gen_particles_gaussian(meta):
     error_function = erfinv(2*m - 1)
     r = 2 + 0.5 * error_function
 
-    print(max(r), min(r))
     theta = generate_theta(r)
 
     particles.radii, particles.theta = QSP_fix(r, theta)
