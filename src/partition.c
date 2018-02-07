@@ -76,6 +76,9 @@ const char *repartition_name[] = {
 
 /* Local functions, if needed. */
 static int check_complete(struct space *s, int verbose, int nregions);
+#if defined(WITH_MPI) && defined(HAVE_METIS)
+static int check_celllist_complete(int *celllist, int ncells, int nregions, int verbose);
+#endif
 
 /*  Vectorisation support */
 /*  ===================== */
@@ -291,12 +294,15 @@ static void split_metis(struct space *s, int nregions, int *celllist) {
 /* qsort support. */
 struct indexval {
   int index;
-  int count;
+  int pcount;
+  int ccount;
+  int oldregion;
+  int newregion;
 };
 static int indexvalcmp(const void *p1, const void *p2) {
   const struct indexval *iv1 = (const struct indexval *)p1;
   const struct indexval *iv2 = (const struct indexval *)p2;
-  return iv2->count - iv1->count;
+  return iv2->ccount - iv1->ccount;
 }
 
 /**
@@ -345,9 +351,12 @@ static void pick_metis(struct space *s, int nregions, double *vertexw,
   if (edgew != NULL)
     if ((weights_e = (idx_t *)malloc(26 * sizeof(idx_t) * ncells)) == NULL)
       error("Failed to allocate edge weights array");
-  idx_t *regionid;
+  idx_t *regionid = NULL;
   if ((regionid = (idx_t *)malloc(sizeof(idx_t) * ncells)) == NULL)
-    error("Failed to allocate regionid array");
+      error("Failed to allocate regionid array");
+  idx_t *bestregionid = NULL;
+  if ((bestregionid = (idx_t *)malloc(sizeof(idx_t) * ncells)) == NULL)
+      error("Failed to allocate bestregionid array");
 
   /* Define the cell graph. */
   graph_init_metis(s, adjncy, xadj);
@@ -426,72 +435,131 @@ static void pick_metis(struct space *s, int nregions, double *vertexw,
   /*dumpMETISGraph("metis_graph", idx_ncells, one, xadj, adjncy,
    *               weights_v, NULL, weights_e);
    */
-  if (METIS_PartGraphKway(&idx_ncells, &one, xadj, adjncy, weights_v, NULL,
-                          weights_e, &idx_nregions, NULL, NULL, options,
-                          &objval, regionid) != METIS_OK)
-    error("Call to METIS_PartGraphKway failed.");
 
-  /* Check that the regionids are ok. */
-  for (int k = 0; k < ncells; k++)
-    if (regionid[k] < 0 || regionid[k] >= nregions)
-      error("Got bad nodeID %" PRIDX " for cell %i.", regionid[k], k);
+  /* Generate a number of solutions in an attempt to minimize the particle
+   * movement, we have no control over the solution, so lets force one...
+   * First check if we have no nodeIDs set yet, if so this is all a waste of
+   * time. */
+  int skipmatch = 1;
+  int maxiter = 1;
+  for (int k = 0; k < ncells; k++) {
+      if (s->cells_top[k].nodeID != 0) {
+          skipmatch = 0;
+          maxiter = 3;
+          break;
+      }
+  }
 
-  /* We want a solution in which the current regions of the space are
-   * preserved when possible, to avoid unneccesary particle movement.
-   * So create a 2d-array of cells counts that are common to all pairs
-   * of old and new ranks. Each element of the array has a cell count and
-   * an unique index so we can sort into decreasing counts. */
+  /* Workspace we can reuse. */
   int indmax = nregions * nregions;
   struct indexval *ivs = malloc(sizeof(struct indexval) * indmax);
-  bzero(ivs, sizeof(struct indexval) * indmax);
-  for (int k = 0; k < ncells; k++) {
-    int index = regionid[k] + nregions * s->cells_top[k].nodeID;
-    ivs[index].count++;
-    ivs[index].index = index;
-  }
-  qsort(ivs, indmax, sizeof(struct indexval), indexvalcmp);
-
-  /* Go through the ivs using the largest counts first, these are the
-   * regions with the most cells in common, old partition to new. */
   int *oldmap = malloc(sizeof(int) * nregions);
   int *newmap = malloc(sizeof(int) * nregions);
-  for (int k = 0; k < nregions; k++) {
-    oldmap[k] = -1;
-    newmap[k] = -1;
-  }
-  for (int k = 0; k < indmax; k++) {
+  int *bestnewmap = malloc(sizeof(int) * nregions);
 
-    /* Stop when all regions with common cells have been considered. */
-    if (ivs[k].count == 0) break;
+  /* Common cell count and space for the region ids. */
+  int bestcount = 0;
 
-    /* Store old and new IDs, if not already used. */
-    int oldregion = ivs[k].index / nregions;
-    int newregion = ivs[k].index - oldregion * nregions;
-    if (newmap[newregion] == -1 && oldmap[oldregion] == -1) {
-      newmap[newregion] = oldregion;
-      oldmap[oldregion] = newregion;
-    }
-  }
+  message("starting loop");
+  for (int iter = 0; iter < maxiter; iter++) {
 
-  /* Handle any regions that did not get selected by picking an unused rank
-   * from oldmap and assigning to newmap. */
-  int spare = 0;
-  for (int k = 0; k < nregions; k++) {
-    if (newmap[k] == -1) {
-      for (int j = spare; j < nregions; j++) {
-        if (oldmap[j] == -1) {
-          newmap[k] = j;
-          oldmap[j] = j;
-          spare = j;
-          break;
-        }
+      /* Wobble the solutions... */
+      options[METIS_OPTION_SEED] = getticks() % INT_MAX;
+
+      if (METIS_PartGraphKway(&idx_ncells, &one, xadj, adjncy, weights_v, NULL,
+                              weights_e, &idx_nregions, NULL, NULL, options,
+                              &objval, regionid) != METIS_OK)
+          error("Call to METIS_PartGraphKway failed.");
+
+      /* Check that the regionids are ok. */
+      for (int k = 0; k < ncells; k++)
+          if (regionid[k] < 0 || regionid[k] >= nregions)
+              error("Got bad nodeID %" PRIDX " for cell %i.", regionid[k], k);
+
+      if (!skipmatch) {
+
+          /* We want a solution in which the current regions of the space are
+           * preserved when possible, to avoid unnecessary particle movement.  So
+           * create an array of cells counts that are common to all pairs of old
+           * and new ranks. Each element of the array has a cell count and an unique
+           * index so we can sort into decreasing counts. */
+          bzero(ivs, sizeof(struct indexval) * indmax);
+          for (int k = 0; k < ncells; k++) {
+              int index = regionid[k] + nregions * s->cells_top[k].nodeID;
+              ivs[index].pcount += s->cells_top[k].count;
+              ivs[index].ccount++;
+              ivs[index].index = index;
+              ivs[index].oldregion = s->cells_top[k].nodeID;
+              ivs[index].newregion = regionid[k];
+          }
+          qsort(ivs, indmax, sizeof(struct indexval), indexvalcmp);
+
+          /* Go through the ivs using the largest counts first, these are the
+           * regions with the most cells in common, old partition to new. */
+          for (int k = 0; k < nregions; k++) {
+              oldmap[k] = -1;
+              newmap[k] = -1;
+          }
+          int count = 0;
+          for (int k = 0; k < indmax; k++) {
+
+              /* Stop when all regions with common cells have been considered. */
+              if (ivs[k].ccount == 0) break;
+              //message("H: %d %d %d %d %d", k, ivs[k].ccount, ivs[k].pcount, ivs[k].oldregion, ivs[k].newregion);
+
+              /* Store old and new IDs, if not already used. */
+              if (newmap[ivs[k].newregion] == -1 && oldmap[ivs[k].oldregion] == -1 && ivs[k].pcount > 0) {
+                  //message("K: %d %d %d %d %d", k, ivs[k].ccount, ivs[k].pcount, ivs[k].oldregion, ivs[k].newregion);
+                  count += ivs[k].ccount;
+                  newmap[ivs[k].newregion] = ivs[k].oldregion;
+                  oldmap[ivs[k].oldregion] = ivs[k].newregion;
+              }
+          }
+
+          /* Handle any regions that did not get selected by picking an unused rank
+           * from oldmap and assigning to newmap. */
+          int spare = 0;
+          for (int k = 0; k < nregions; k++) {
+              if (newmap[k] == -1) {
+                  for (int j = spare; j < nregions; j++) {
+                      if (oldmap[j] == -1) {
+                          newmap[k] = j;
+                          oldmap[j] = j;
+                          spare = j;
+                          break;
+                      }
+                  }
+              }
+          }
+
+          /* Is this the best solution. If so keep. Don't use incomplete
+           * solutions. Unless we have no other. */
+          if ((check_celllist_complete(regionid, ncells, nregions, 1) && count > bestcount) 
+              || bestcount == 0) {
+              message("new bestcount = %d > %d", count, bestcount);
+              bestcount = count;
+
+              int *tmp1 = bestnewmap;
+              bestnewmap = newmap;
+              newmap = tmp1;
+
+              idx_t *tmp2 = bestregionid;
+              bestregionid = regionid;
+              regionid = tmp2;
+          }
       }
-    }
   }
 
-  /* Set the cell list to the region index. */
-  for (int k = 0; k < ncells; k++) {
-    celllist[k] = newmap[regionid[k]];
+  if (skipmatch) {
+      /* Just use the regions. */
+      for (int k = 0; k < ncells; k++) {
+          celllist[k] = regionid[k];
+      }
+  } else {
+      /* Using the selected map, set the cell list to the region index. */
+      for (int k = 0; k < ncells; k++) {
+          celllist[k] = bestnewmap[bestregionid[k]];
+      }
   }
 
   /* Clean up. */
@@ -500,9 +568,11 @@ static void pick_metis(struct space *s, int nregions, double *vertexw,
   free(ivs);
   free(oldmap);
   free(newmap);
+  free(bestnewmap);
   free(xadj);
   free(adjncy);
   free(regionid);
+  free(bestregionid);
 }
 #endif
 
@@ -760,29 +830,12 @@ static void repart_edge_metis(int partweights, int bothweights, int timebins,
     else
       pick_metis(s, nr_nodes, NULL, weights_e, celllist);
 
-    /* Check that all cells have good values. */
-    for (int k = 0; k < nr_cells; k++)
-      if (celllist[k] < 0 || celllist[k] >= nr_nodes)
-        error("Got bad nodeID %d for cell %i.", celllist[k], k);
-
     /* Check that the partition is complete and all nodes have some work. */
-    int present[nr_nodes];
-    int failed = 0;
-    for (int i = 0; i < nr_nodes; i++) present[i] = 0;
-    for (int i = 0; i < nr_cells; i++) present[celllist[i]]++;
-    for (int i = 0; i < nr_nodes; i++) {
-      if (!present[i]) {
-        failed = 1;
-        message("Node %d is not present after repartition", i);
-      }
-    }
-
-    /* If partition failed continue with the current one, but make this
-     * clear. */
-    if (failed) {
-      message(
-          "WARNING: METIS repartition has failed, continuing with "
-          "the current partition, load balance will not be optimal");
+    if (!check_celllist_complete(celllist, nr_cells, nr_nodes, 1)) {
+      /* If partition failed continue with the current one, but make this
+       * clear. */
+      message( "WARNING: METIS repartition has failed, continuing with "
+               "the current partition, load balance will not be optimal");
       for (int k = 0; k < nr_cells; k++) celllist[k] = cells[k].nodeID;
     }
   }
@@ -1206,6 +1259,46 @@ static int check_complete(struct space *s, int verbose, int nregions) {
   free(present);
   return (!failed);
 }
+
+#if defined(WITH_MPI) && defined(HAVE_METIS)
+/**
+ * @brief Check if all regions have been assigned a node in a celllist.
+ *
+ * @param celllist the list of region id for some cells.
+ * @param ncells number of cells.
+ * @param nregions number of regions expected.
+ * @param verbose if true report the missing regions.
+ *
+ * @return true if all regions have been found, false otherwise.
+ */
+static int check_celllist_complete(int *celllist, int ncells, int nregions,
+                                   int verbose) {
+
+  int *present = (int *)malloc(sizeof(int) * nregions);
+  if (present == NULL) error("Failed to allocate present array");
+
+  int failed = 0;
+  for (int i = 0; i < nregions; i++) present[i] = 0;
+  for (int i = 0; i < ncells; i++) {
+    if (celllist[i] <= nregions)
+      present[celllist[i]]++;
+    else 
+      if (verbose) message("Bad nodeID: %d", celllist[i]);
+  }
+  for (int i = 0; i < nregions; i++) {
+    if (!present[i]) {
+      failed = 1;
+      if (verbose)
+        message("Node %d is not present in partition", i);
+      else
+        break;
+    }
+  }
+
+  free(present);
+  return (!failed);
+}
+#endif
 
 /**
  * @brief Partition a space of cells based on another space of cells.
