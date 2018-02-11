@@ -425,6 +425,11 @@ int main(int argc, char *argv[]) {
     message("WARNING: Non-optimal thread barriers are being used.");
 #endif
 
+/* Temporary stop for MPI with limiter */
+#ifdef WITH_MPI
+  if (with_limiter) error("No support for time-step limiter over MPI.");
+#endif
+
   /* How large are the parts? */
   if (myrank == 0) {
     message("sizeof(part)        is %4zi bytes.", sizeof(struct part));
