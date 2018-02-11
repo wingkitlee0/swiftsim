@@ -56,10 +56,9 @@ void proxy_cells_exch1(struct proxy *p) {
 
   /* Send the number of pcells. */
   int err = MPI_Isend(&p->size_pcells_out, 1, MPI_INT, p->nodeID,
-                p->mynodeID * proxy_tag_shift + proxy_tag_count, MPI_COMM_WORLD,
-		      &p->req_cells_count_out);
-  if(err != MPI_SUCCESS)
-    mpi_error(err, "Failed to isend nr of pcells.");
+                      p->mynodeID * proxy_tag_shift + proxy_tag_count,
+                      MPI_COMM_WORLD, &p->req_cells_count_out);
+  if (err != MPI_SUCCESS) mpi_error(err, "Failed to isend nr of pcells.");
   // message( "isent pcell count (%i) from node %i to node %i." ,
   // p->size_pcells_out , p->mynodeID , p->nodeID ); fflush(stdout);
 
@@ -76,21 +75,19 @@ void proxy_cells_exch1(struct proxy *p) {
 
   /* Send the pcell buffer. */
   err = MPI_Isend(p->pcells_out, sizeof(struct pcell) * p->size_pcells_out,
-		  MPI_BYTE, p->nodeID,
-		  p->mynodeID * proxy_tag_shift + proxy_tag_cells, MPI_COMM_WORLD,
-		  &p->req_cells_out);
+                  MPI_BYTE, p->nodeID,
+                  p->mynodeID * proxy_tag_shift + proxy_tag_cells,
+                  MPI_COMM_WORLD, &p->req_cells_out);
 
-  if(err != MPI_SUCCESS)
-    mpi_error(err, "Failed to pcell_out buffer.");
+  if (err != MPI_SUCCESS) mpi_error(err, "Failed to pcell_out buffer.");
   // message( "isent pcells (%i) from node %i to node %i." , p->size_pcells_out
   // , p->mynodeID , p->nodeID ); fflush(stdout);
 
   /* Receive the number of pcells. */
   err = MPI_Irecv(&p->size_pcells_in, 1, MPI_INT, p->nodeID,
-		  p->nodeID * proxy_tag_shift + proxy_tag_count, MPI_COMM_WORLD,
-		  &p->req_cells_count_in);
-  if(err != MPI_SUCCESS)
-    mpi_error(err, "Failed to irecv nr of pcells.");
+                  p->nodeID * proxy_tag_shift + proxy_tag_count, MPI_COMM_WORLD,
+                  &p->req_cells_count_in);
+  if (err != MPI_SUCCESS) mpi_error(err, "Failed to irecv nr of pcells.");
 // message( "irecv pcells count on node %i from node %i." , p->mynodeID ,
 // p->nodeID ); fflush(stdout);
 
@@ -111,12 +108,11 @@ void proxy_cells_exch2(struct proxy *p) {
 
   /* Receive the particle buffers. */
   int err = MPI_Irecv(p->pcells_in, sizeof(struct pcell) * p->size_pcells_in,
-		      MPI_BYTE, p->nodeID,
-		      p->nodeID * proxy_tag_shift + proxy_tag_cells, MPI_COMM_WORLD,
-		      &p->req_cells_in);
+                      MPI_BYTE, p->nodeID,
+                      p->nodeID * proxy_tag_shift + proxy_tag_cells,
+                      MPI_COMM_WORLD, &p->req_cells_in);
 
-  if(err != MPI_SUCCESS)
-    mpi_error(err, "Failed to irecv part data.");
+  if (err != MPI_SUCCESS) mpi_error(err, "Failed to irecv part data.");
 // message( "irecv pcells (%i) on node %i from node %i." , p->size_pcells_in ,
 // p->mynodeID , p->nodeID ); fflush(stdout);
 

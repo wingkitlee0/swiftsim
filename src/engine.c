@@ -2772,7 +2772,8 @@ static inline void engine_make_hydro_loops_dependencies(
   if (with_limiter) {
     scheduler_addunlock(sched, c->super->kick2, limiter);
     scheduler_addunlock(sched, limiter, c->super->timestep);
-    if(limiter->type != task_type_self) scheduler_addunlock(sched, limiter, c->super->timestep_limiter);
+    if (limiter->type != task_type_self)
+      scheduler_addunlock(sched, limiter, c->super->timestep_limiter);
   }
 }
 
@@ -4674,7 +4675,6 @@ void engine_step(struct engine *e) {
   /* Save some statistics ? */
   if (e->time - e->timeLastStatistics >= e->deltaTimeStatistics)
     e->save_stats = 1;
-  }
 
   /* Do we want a snapshot? */
   if (e->ti_end_min >= e->ti_nextSnapshot && e->ti_nextSnapshot > 0)
@@ -5697,7 +5697,7 @@ void engine_config(int restart, struct engine *e,
           kernel_name, e->hydro_properties->target_neighbours,
           e->hydro_properties->delta_neighbours,
           e->hydro_properties->eta_neighbours, configuration_options(),
-            compilation_cflags());
+          compilation_cflags());
 
       fprintf(e->file_timesteps,
               "# Step Properties: Rebuild=%d, Redistribute=%d, Repartition=%d, "
@@ -5707,9 +5707,9 @@ void engine_config(int restart, struct engine *e,
               engine_step_prop_snapshot, engine_step_prop_restarts);
 
       fprintf(e->file_timesteps,
-              "# %6s %14s %14s %9s %12s %12s %12s %16s [%s] %6s\n", "Step", "Time",
-              "Time-step", "Time-bins", "Updates", "g-Updates", "s-Updates",
-              "Wall-clock time", clocks_getunit(), "Props");
+              "# %6s %14s %14s %9s %12s %12s %12s %16s [%s] %6s\n", "Step",
+              "Time", "Time-step", "Time-bins", "Updates", "g-Updates",
+              "s-Updates", "Wall-clock time", clocks_getunit(), "Props");
       fflush(e->file_timesteps);
     }
   }
