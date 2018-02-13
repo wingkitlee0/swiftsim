@@ -296,8 +296,22 @@ print "-------------------------------------------------\n"
 if order > 0:
     print "#if SELF_GRAVITY_MULTIPOLE_ORDER > %d\n"%(order-1)
 
-    print "/* %s order contributions */"%(ordinal(order-1))
+print "/* %s order contributions */"%(ordinal(order))
 
+print "gp->pot +=",
+first = True
+for i in range(order + 1):
+    for j in range(order + 1):
+        for k in range(order + 1):
+            if i + j + k == order:
+                if first:
+                    first = False
+                else:
+                    print "+",
+                print "X_%d%d%d(dx) * lb->F_%d%d%d"%(i, j, k, i, j, k),
+print ";"
+
+if order > 0:
     for r in range(3):
         print "gp->a_grav[%d] +="%(r),
 

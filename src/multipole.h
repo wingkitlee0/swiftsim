@@ -2440,13 +2440,6 @@ INLINE static void gravity_L2P(const struct grav_tensor *lb,
   gp->potential += pot;
 }
 
-INLINE static void gravity_M2P(const struct multipole *ma,
-                               const struct gravity_props *props,
-                               const double loc[3], struct gpart *gp) {
-
-  error("Dead function. Do not use.");
-}
-
 /**
  * @brief Checks whether a cell-cell interaction can be appromixated by a M-M
  * interaction using the distance and cell radius.
