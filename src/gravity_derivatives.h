@@ -96,7 +96,7 @@ struct potential_derivatives_M2L {
  */
 struct potential_derivatives_M2P {
 
-  /* 0th order terms */
+  /* 0th order term */
   float D_000;
 
   /* 1st order terms */
