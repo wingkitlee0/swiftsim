@@ -694,7 +694,7 @@ static INLINE void runner_doself_grav_pp_full(struct runner *r,
     const float h_inv_i = 1.f / h_i;
     const float h_inv3_i = h_inv_i * h_inv_i * h_inv_i;
 
-    /* Local accumulators for the acceleration */
+    /* Local accumulators for the acceleration and potential */
     float a_x = 0.f, a_y = 0.f, a_z = 0.f, pot = 0.f;
 
     /* Make the compiler understand we are in happy vectorization land */
