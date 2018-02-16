@@ -1924,7 +1924,7 @@ void DOSUB_PAIR1(struct runner *r_, struct cell *ci_, struct cell *cj_) {
   }
 
   TIMER_TIC;
-  cell_active_hydro_pairs_recurse(ci_, cj_, e_, fun, r_);
+  cell_active_hydro_pairs_recurse(ci_, cj_, e_, /* do_self */ 0, fun, r_);
   TIMER_TOC(TIMER_DOSUB_PAIR);
 }
 
@@ -2000,7 +2000,7 @@ void DOSUB_PAIR2(struct runner *r_, struct cell *ci_, struct cell *cj_) {
   }
 
   TIMER_TIC;
-  cell_active_hydro_pairs_recurse(ci_, cj_, e_, fun, r_);
+  cell_active_hydro_pairs_recurse(ci_, cj_, e_, /* do_self */ 0, fun, r_);
   TIMER_TOC(TIMER_DOSUB_PAIR);
 }
 
