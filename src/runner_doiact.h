@@ -1193,7 +1193,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
      we are out of range of anything in cj (using the maximal hi). */
   for (int pid = count_i - 1;
        pid >= 0 &&
-       sort_i[pid].d + hi_max * kernel_gamma + dx_max - rshift > dj_min;
+           sort_i[pid].d + hi_max * kernel_gamma + dx_max - rshift > dj_min;
        pid--) {
 
     /* Get a hold of the ith part in ci. */
@@ -1270,10 +1270,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
         if (r2 < hig2) {
           IACT_NONSYM(r2, dx, hj, hi, pj, pi);
         }
-      } /* loop over the active parts in cj. */
-    }
-
-    else { /* pi is active, we may need to update pi and pj */
+      }     /* loop over the active parts in cj. */
+    } else {/* pi is active, we may need to update pi and pj */
 
       /* Loop over *all* the parts in cj in range of pi. */
       for (int pjd = 0; pjd < count_j && sort_j[pjd].d < di; pjd++) {
@@ -1342,7 +1340,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
      we are out of range of anything in ci (using the maximal hj). */
   for (int pjd = 0;
        pjd < count_j &&
-       sort_j[pjd].d - hj_max * kernel_gamma - dx_max < di_max - rshift;
+           sort_j[pjd].d - hj_max * kernel_gamma - dx_max < di_max - rshift;
        pjd++) {
 
     /* Get a hold of the jth part in cj. */
@@ -1420,10 +1418,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj, const int sid,
         if (r2 < hjg2 && r2 >= hig2) {
           IACT_NONSYM(r2, dx, hi, hj, pi, pj);
         }
-      } /* loop over the active parts in ci. */
-    }
-
-    else { /* pj is active, we may need to update pj and pi */
+      }     /* loop over the active parts in ci. */
+    } else {/* pj is active, we may need to update pj and pi */
 
       /* Loop over *all* the parts in ci. */
       for (int pid = count_i - 1; pid >= 0 && sort_i[pid].d - rshift > dj;
@@ -1902,7 +1898,7 @@ void DOSUB_PAIR1(struct runner *r_, struct cell *ci_, struct cell *cj_) {
 
   const struct engine *e_ = r_->e;
 
-  void fun(struct cell * ci, struct cell * cj, int sid, void *data) {
+  void fun(struct cell * ci, struct cell * cj, int sid, void * data) {
 
     struct runner *r = (struct runner *)data;
     const struct engine *e = r->e;
@@ -1978,7 +1974,7 @@ void DOSUB_PAIR2(struct runner *r_, struct cell *ci_, struct cell *cj_) {
 
   const struct engine *e_ = r_->e;
 
-  void fun(struct cell * ci, struct cell * cj, int sid, void *data) {
+  void fun(struct cell * ci, struct cell * cj, int sid, void * data) {
 
     struct runner *r = (struct runner *)data;
     const struct engine *e = r->e;
@@ -2039,8 +2035,39 @@ void DOSUB_SELF2(struct runner *r, struct cell *ci, int gettimer) {
   if (gettimer) TIMER_TOC(TIMER_DOSUB_SELF);
 }
 
+// void DOSUB_SUBSET_new(struct runner *r, struct cell *ci_, struct cell *cj_,
+//                   int *ind, int count) {
+// 
+//   /* Pack the data for the recursive function. */
+//   struct data {
+//     struct part *parts;
+//     int *ind;
+//     int count;
+//   };
+// 
+//   void fun(struct cell * ci, struct cell * cj, int sid, void * data) {
+//     struct data *d = (struct data *)data;
+//     struct part *parts = d->parts;
+//     /* Find out in which sub-cell of ci the parts are. */
+//     struct cell *sub = NULL;
+//     if (ci->split) {
+//       for (int k = 0; k < 8; k++) {
+//         if (ci->progeny[k] != NULL) {
+//           if (&parts[ind[0]] >= &ci->progeny[k]->parts[0] &&
+//               &parts[ind[0]] < &ci->progeny[k]->parts[ci->progeny[k]->count]) {
+//             sub = ci->progeny[k];
+//             break;
+//           }
+//         }
+//       }
+//     }
+//     if (sub) return;
+//   }
+// }
+
 void DOSUB_SUBSET(struct runner *r, struct cell *ci, struct part *parts,
-                  int *ind, int count, struct cell *cj, int sid, int gettimer) {
+                      int *ind, int count, struct cell *cj, int sid,
+                      int gettimer) {
 
   const struct engine *e = r->e;
   struct space *s = e->s;
