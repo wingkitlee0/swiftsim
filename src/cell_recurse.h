@@ -57,7 +57,7 @@ static void cell_active_hydro_pairs_recurse(struct cell *ci, struct cell *cj,
   /* Self interaction? */
   if (cj == NULL) {
     /* Do anything? */
-    if (!cell_is_active_hydro(ci, e)) return;
+    if (!do_self || !cell_is_active_hydro(ci, e)) return;
 
     /* Recurse? */
     if (cell_can_recurse_in_self_task(ci)) {
