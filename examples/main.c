@@ -122,6 +122,22 @@ int main(int argc, char *argv[]) {
   struct clocks_time tic, toc;
   struct engine e;
 
+  /* Structs used by the engine. Declare now to make sure these are always in
+   * scope.  */
+  struct chemistry_data chemistry;
+  struct cooling_function_data cooling_func;
+  struct cosmology cosmo;
+  struct external_potential potential;
+  struct gpart *gparts = NULL;
+  struct gravity_props gravity_properties;
+  struct hydro_props hydro_properties;
+  struct part *parts = NULL;
+  struct phys_const prog_const;
+  struct sourceterms sourceterms;
+  struct space s;
+  struct spart *sparts = NULL;
+  struct unit_system us;
+
   int nr_nodes = 1, myrank = 0;
 
 #ifdef WITH_MPI
@@ -417,7 +433,8 @@ int main(int argc, char *argv[]) {
   }
 
   /* Read the parameter file */
-  struct swift_params *params = malloc(sizeof(struct swift_params));
+  struct swift_params *params =
+      (struct swift_params *)malloc(sizeof(struct swift_params));
   if (params == NULL) error("Error allocating memory for the parameter file.");
   if (myrank == 0) {
     message("Reading runtime parameters from file '%s'", paramFileName);
@@ -573,10 +590,8 @@ int main(int argc, char *argv[]) {
 
     /* Not restarting so look for the ICs. */
     /* Initialize unit system and constants */
-    struct unit_system us;
-    struct phys_const prog_const;
     units_init(&us, params, "InternalUnitSystem");
-    phys_const_init(&us, &prog_const);
+    phys_const_init(&us, params, &prog_const);
     if (myrank == 0 && verbose > 0) {
       message("Internal unit system: U_M = %e g.", us.UnitMass_in_cgs);
       message("Internal unit system: U_L = %e cm.", us.UnitLength_in_cgs);
@@ -586,13 +601,18 @@ int main(int argc, char *argv[]) {
       phys_const_print(&prog_const);
     }
 
+    /* Initialise the cosmology */
+    if (with_cosmology)
+      cosmology_init(params, &us, &prog_const, &cosmo);
+    else
+      cosmology_init_no_cosmo(&cosmo);
+    if (with_cosmology) cosmology_print(&cosmo);
+
     /* Initialise the hydro properties */
-    struct hydro_props hydro_properties;
     if (with_hydro) hydro_props_init(&hydro_properties, params);
     if (with_hydro) eos_init(&eos, params);
 
     /* Initialise the gravity properties */
-    struct gravity_props gravity_properties;
     if (with_self_gravity) gravity_props_init(&gravity_properties, params);
 
     /* Read particles and space information from (GADGET) ICs */
@@ -606,9 +626,6 @@ int main(int argc, char *argv[]) {
     fflush(stdout);
 
     /* Get ready to read particles of all kinds */
-    struct part *parts = NULL;
-    struct gpart *gparts = NULL;
-    struct spart *sparts = NULL;
     size_t Ngas = 0, Ngpart = 0, Nspart = 0;
     double dim[3] = {0., 0., 0.};
     int periodic = 0;
@@ -673,7 +690,6 @@ int main(int argc, char *argv[]) {
 
     /* Initialize the space with these data. */
     if (myrank == 0) clocks_gettime(&tic);
-    struct space s;
     space_init(&s, params, dim, parts, gparts, sparts, Ngas, Ngpart, Nspart,
                periodic, replicate, with_self_gravity, talking, dry_run);
 
@@ -726,23 +742,19 @@ int main(int argc, char *argv[]) {
     }
 
     /* Initialise the external potential properties */
-    struct external_potential potential;
     if (with_external_gravity)
       potential_init(params, &prog_const, &us, &s, &potential);
     if (myrank == 0) potential_print(&potential);
 
     /* Initialise the cooling function properties */
-    struct cooling_function_data cooling_func;
     if (with_cooling) cooling_init(params, &us, &prog_const, &cooling_func);
     if (myrank == 0) cooling_print(&cooling_func);
 
     /* Initialise the chemistry */
-    struct chemistry_data chemistry;
     chemistry_init(params, &us, &prog_const, &chemistry);
     if (myrank == 0) chemistry_print(&chemistry);
 
     /* Initialise the feedback properties */
-    struct sourceterms sourceterms;
     if (with_sourceterms) sourceterms_init(params, &us, &sourceterms);
     if (with_sourceterms && myrank == 0) sourceterms_print(&sourceterms);
 
@@ -763,9 +775,9 @@ int main(int argc, char *argv[]) {
     /* Initialize the engine with the space and policies. */
     if (myrank == 0) clocks_gettime(&tic);
     engine_init(&e, &s, params, N_total[0], N_total[1], engine_policies,
-                talking, &reparttype, &us, &prog_const, &hydro_properties,
-                &gravity_properties, &potential, &cooling_func, &chemistry,
-                &sourceterms);
+                talking, &reparttype, &us, &prog_const, &cosmo,
+                &hydro_properties, &gravity_properties, &potential,
+                &cooling_func, &chemistry, &sourceterms);
     engine_config(0, &e, params, nr_nodes, myrank, nr_threads, with_aff,
                   talking, restart_file);
     if (myrank == 0) {
@@ -786,7 +798,7 @@ int main(int argc, char *argv[]) {
           "from t=%.3e until t=%.3e with %d threads and %d queues "
           "(dt_min=%.3e, "
           "dt_max=%.3e)...",
-          e.timeBegin, e.timeEnd, e.nr_threads, e.sched.nr_queues, e.dt_min,
+          e.time_begin, e.time_end, e.nr_threads, e.sched.nr_queues, e.dt_min,
           e.dt_max);
       fflush(stdout);
     }
@@ -833,9 +845,10 @@ int main(int argc, char *argv[]) {
 
   /* Legend */
   if (myrank == 0)
-    printf("# %6s %14s %14s %12s %12s %12s %16s [%s] %6s\n", "Step", "Time",
-           "Time-step", "Updates", "g-Updates", "s-Updates", "Wall-clock time",
-           clocks_getunit(), "Props");
+    printf("# %6s %14s %14s %14s %9s %12s %12s %12s %16s [%s] %6s\n", "Step",
+           "Time", "Scale-factor", "Time-step", "Time-bins", "Updates",
+           "g-Updates", "s-Updates", "Wall-clock time", clocks_getunit(),
+           "Props");
 
   /* File for the timers */
   if (with_verbose_timers) timers_open_file(myrank);
@@ -861,8 +874,7 @@ int main(int argc, char *argv[]) {
     if (with_verbose_timers) timers_print(e.step);
 
     /* Every so often allow the user to stop the application and dump the
-     * restart
-     * files. */
+     * restart files. */
     if (j % restart_stop_steps == 0) {
       force_stop = restart_stop_now(restart_dir, 0);
       if (myrank == 0 && force_stop)
@@ -870,8 +882,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Also if using nsteps to exit, will not have saved any restarts on exit,
-     * make
-     * sure we do that (useful in testing only). */
+     * make sure we do that (useful in testing only). */
     if (force_stop || (e.restart_onexit && e.step - 1 == nsteps))
       engine_dump_restarts(&e, 0, 1);
 
