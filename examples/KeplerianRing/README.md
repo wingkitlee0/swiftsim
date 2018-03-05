@@ -75,7 +75,8 @@ the results of the example use the plotting script:
 
     python3 plotSolution.py
 
-which will produce a png file in the directory.
+which will produce a png file in the directory. Check out `plotSolution.py
+--help` for more options.
 
 You can also try the `make_movie.py` script which should make a movie.
 

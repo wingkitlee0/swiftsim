@@ -43,7 +43,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.gridspec as gridspec
 
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = lambda x: x
+
 from make_movie import get_metadata
 
 
@@ -191,15 +195,22 @@ def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50, 
     densities = [initial[1]] + other_densities
 
     masses_inside_outside = [
-        get_mass_outside_inside(snap, radius=radius, filename=filename) for snap in tqdm(
+        get_mass_outside_inside(snap, radius=radius, filename=filename)[0] for snap in tqdm(
             range(minsnap, maxsnap+1), desc="Mass Flow"
         )
     ]
-    mass_flows = [
-        y[0] - x[0] for x, y in zip(
+
+    # Between the initial conditions and the first snapshot we hope that there
+    # has been no mass flow, hence the [0.] + 
+    mass_flows = [0.] + [
+        y - x for x, y in zip(
             masses_inside_outside[1:],
             masses_inside_outside[:-1]
         )
+    ]
+
+    cumulative_mass_flows = [
+        sum(mass_flows[:x]) for x in range(len(mass_flows))
     ]
 
     chisq = [
@@ -209,7 +220,7 @@ def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50, 
         ) for dens in tqdm(densities, desc="Chi Squared")
     ]
 
-    return initial[0], densities, chisq, mass_flows
+    return initial[0], densities, chisq, cumulative_mass_flows
 
 
 def plot_chisq(ax, minsnap, maxsnap, chisq, filename="keplerian_ring"):
@@ -232,6 +243,7 @@ def plot_mass_flow(ax, minsnap, maxsnap, mass_flow, filename="keplerian_ring"):
     """
     snapshots = np.arange(minsnap, maxsnap + 1)
     rotations = [convert_snapshot_number_to_rotations_at(1, snap, filename) for snap in snapshots]
+
     ax.plot(rotations, mass_flow)
 
     ax.set_xlabel("Number of rotations")
@@ -316,8 +328,40 @@ def surface_density_plot_no_yt(ax, snapnum, filename="keplerian_ring", density_l
 
     ax.scatter(x, y, c=density, vmin=vlim[0], vmax=vlim[1], s=0.1)
 
+
+    metadata = get_metadata("{}_{:04d}.hdf5".format(filename, snapnum))
+    period = metadata["period"]
+
+    t = ax.text(
+        2.5,
+        7.5,
+        "Snapshot = {:04d}\nRotations = {:1.2f}".format(
+            snapnum,
+            float(metadata["header"]["Time"])/period
+        ),
+        color='black'
+    )
+
+    t.set_bbox(dict(alpha=0.5, color="white"))
+
+    ax.axis("equal")
+
     ax.set_xlim(2, 8)
     ax.set_ylim(2, 8)
+
+    # We now want to remove all of the ticklabels.
+
+    for axis in ['x', 'y']:
+        ax.tick_params(
+            axis=axis,          
+            which='both',      
+            bottom='off',      
+            top='off',         
+            left='off',
+            right='off',
+            labelleft='off',
+            labelbottom='off'
+        ) 
 
     return density_limits, vlim
 
@@ -542,7 +586,6 @@ if __name__ == "__main__":
 
     figure = plt.figure(figsize=(12, 10))
     axes = get_axes_grid(figure)
-    figure.subplots_adjust(hspace=0, wspace=0)
 
     density_limits = None
     vlim = None
@@ -555,6 +598,8 @@ if __name__ == "__main__":
                 density_limits=density_limits,
                 vlim=vlim
             )
+
+            figure.subplots_adjust(hspace=0, wspace=0)
         else:
             density_limits, vlim = surface_density_plot_no_yt(
                 ax,
@@ -569,7 +614,7 @@ if __name__ == "__main__":
     derived_data = get_derived_data(snapshots[0], snapshots[2], binnumber=int(args["nbins"]))
 
     if args["plotmassflow"]:
-        plot_mass_flow(axes[3], snapshots[0], snapshots[1], derived_data[3])
+        plot_mass_flow(axes[3], snapshots[0], snapshots[2], derived_data[3])
     else:
         plot_density_r(axes[3], derived_data[0], derived_data[1], snapshots)
 
