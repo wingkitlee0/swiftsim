@@ -156,15 +156,15 @@ def get_mass_outside_inside(snap, radius=2, filename="keplerian_ring"):
     flow inside and outside of the ring with a postprocessing routine in
     get_derived_data.
     """
-    snap = "{:04d}".format(snapshot)
-    filename = f"{filename}_{snap}.hdf5"
+    snapshot = "{:04d}".format(snap)
+    filename = f"{filename}_{snapshot}.hdf5"
 
     radii, masses = load_data(filename)
 
     below = sum(masses[radii < radius])
     above = sum(masses[radii > radius])
 
-    return inside, outside
+    return below, above
 
 
 def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50, radius=2):
@@ -297,16 +297,19 @@ def surface_density_plot_no_yt(ax, snapnum, filename="keplerian_ring", density_l
     max/min.
     """
 
-    with h5py.File(f"{}_{:04d}.hdf5".format(filename, snapnum)) as filehandle:
+    with h5py.File("{}_{:04d}.hdf5".format(filename, snapnum)) as filehandle:
         density = filehandle["PartType0"]["Density"][...]
-        x, y, _ = filehandle["PartType0"]["Coordinates"][:, 0:2].T
+        x, y = filehandle["PartType0"]["Coordinates"][:, 0:2].T
 
     new_vlim = (density.min(), density.max())
 
     if vlim is None:
         vlim = new_vlim
 
-    ax.scatter(x, y, density, vmin=vlim[0], vmax=vlim[1])
+    ax.scatter(x, y, c=density, vmin=vlim[0], vmax=vlim[1], s=0.1)
+
+    ax.set_xlim(2, 8)
+    ax.set_ylim(2, 8)
 
     return density_limits, vlim
 
@@ -508,8 +511,8 @@ if __name__ == "__main__":
              Use yt to do the plots at the top of the page. If set to anything
              other than a 'truthy' value, we will use a homebrew plotting
              setup. Default: False
-             """
-        default=False
+             """,
+        default=False,
         required=False
     )
 
