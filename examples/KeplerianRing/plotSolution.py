@@ -29,7 +29,13 @@ import matplotlib
 matplotlib.use("Agg")
 matplotlib.rc("text", usetex=True)
 
-import yt
+try:
+    import yt
+    ytavail = True
+except ImportError:
+    print("yt not found. Falling back on homebrew plots.")
+    ytavail = False
+
 import h5py
 import os
 
@@ -282,6 +288,30 @@ def plot_extra_info(ax, filename):
     return
 
 
+def surface_density_plot_no_yt(ax, snapnum, filename="keplerian_ring", density_limits=None, vlim=None):
+    """
+    Make the surface density plot (sans yt).
+
+    Also returns the max and minimum values for the density so these can
+    be passed to the next call, as well as vlim which are the colourmap
+    max/min.
+    """
+
+    with h5py.File(f"{}_{:04d}.hdf5".format(filename, snapnum)) as filehandle:
+        density = filehandle["PartType0"]["Density"][...]
+        x, y, _ = filehandle["PartType0"]["Coordinates"][:, 0:2].T
+
+    new_vlim = (density.min(), density.max())
+
+    if vlim is None:
+        vlim = new_vlim
+
+    ax.scatter(x, y, density, vmin=vlim[0], vmax=vlim[1])
+
+    return density_limits, vlim
+
+
+
 def surface_density_plot(ax, snapnum, filename="keplerian_ring", density_limits=None, vlim=None):
     """
     Make the surface density plot (via yt).
@@ -470,6 +500,18 @@ if __name__ == "__main__":
         default="keplerian_ring",
         required=False
     )
+    
+    parser.add_argument(
+        "-y",
+        "--yt",
+        help="""
+             Use yt to do the plots at the top of the page. If set to anything
+             other than a 'truthy' value, we will use a homebrew plotting
+             setup. Default: False
+             """
+        default=False
+        required=False
+    )
 
     args = vars(parser.parse_args())
 
@@ -495,12 +537,20 @@ if __name__ == "__main__":
     vlim = None
 
     for snap, ax in zip(snapshots, tqdm(axes[0:3], desc="Images")):
-        density_limits = surface_density_plot(
-            ax,
-            snap,
-            density_limits=density_limits,
-            vlim=vlim
-        )
+        if args["yt"] and ytavail:
+            density_limits, vlim = surface_density_plot(
+                ax,
+                snap,
+                density_limits=density_limits,
+                vlim=vlim
+            )
+        else:
+            density_limits, vlim = surface_density_plot_no_yt(
+                ax,
+                snap,
+                density_limits=density_limits,
+                vlim=vlim
+            )
 
     # Now we need to do the density(r) plot.
 
