@@ -506,7 +506,13 @@ def gen_particles_spiral(meta):
     particles.exclude_particles((particles.softening, 100.))
     
     # This way of doing densities does not work for different sized patches.
-    particles.densities = sigma(particles.radii)
+    # Therefore we need to weight by effecitve area.
+    dtheta = (particles.theta[1:] - particles.theta[:-1]) / 2
+    areas = np.square(4 * particles.radii[1:] * np.sin(dtheta))
+    areas = np.hstack((np.array([1]), areas))
+
+    # Now do the 'actual' density calculation.
+    particles.densities = areas * sigma(particles.radii)
     particles.calculate_velocities()
     particles.calculate_masses()
 
