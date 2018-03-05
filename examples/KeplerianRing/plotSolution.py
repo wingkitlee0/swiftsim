@@ -89,9 +89,17 @@ def get_yt_actual_data(plot, name="density"):
 def chi_square(observed, expected):
     """
     The chi squared statistic.
+        
+    This also looks for where expected == 0 and masks over those particles to
+    avoid divide by zero errors and unrealistically high chi squared.
     """
 
-    return sum(((observed - expected)**2)/expected**2)
+    mask = np.array(expected) != 0
+
+    masked_expected = np.array(expected)[mask]
+    masked_observed = np.array(observed)[mask]
+
+    return sum(((masked_observed - masked_expected)**2)/masked_expected**2)
 
 
 def load_data(filename):
