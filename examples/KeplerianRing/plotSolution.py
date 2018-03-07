@@ -210,7 +210,7 @@ def get_derived_data(minsnap, maxsnap, filename="keplerian_ring", binnumber=50, 
     ]
 
     cumulative_mass_flows = [
-        sum(mass_flows[:x]) for x in range(len(mass_flows))
+        sum(mass_flows[:x])/masses_inside_outside[0] for x in range(len(mass_flows))
     ]
 
     chisq = [
@@ -247,7 +247,7 @@ def plot_mass_flow(ax, minsnap, maxsnap, mass_flow, filename="keplerian_ring"):
     ax.plot(rotations, mass_flow)
 
     ax.set_xlabel("Number of rotations")
-    ax.set_ylabel("Mass flow out of ring")
+    ax.set_ylabel(r"Mass flow out of ring ($M_{\rm ring}$)")
 
     return
 
