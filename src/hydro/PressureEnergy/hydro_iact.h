@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
-#ifndef SWIFT_MINIMAL_HYDRO_IACT_H
-#define SWIFT_MINIMAL_HYDRO_IACT_H
+#ifndef SWIFT_PRESSURE_ENERGY_HYDRO_IACT_H
+#define SWIFT_PRESSURE_ENERGY_HYDRO_IACT_H
 
 /**
  * @file PressureEnergy/hydro_iact.h
