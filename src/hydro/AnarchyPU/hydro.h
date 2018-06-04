@@ -312,10 +312,7 @@ __attribute__((always_inline)) INLINE static void hydro_init_part(
   p->pressure_bar = 0.f;
   p->density.pressure_bar_dh = 0.f;
 
-  p->density.div_v = 0.f;
-  p->density.rot_v[0] = 0.f;
-  p->density.rot_v[1] = 0.f;
-  p->density.rot_v[2] = 0.f;
+  p->div_v = 0.f;
 }
 
 /**
@@ -359,13 +356,8 @@ __attribute__((always_inline)) INLINE static void hydro_end_density(
   const float rho_inv = 1.f / p->rho;
   const float a_inv2 = cosmo->a2_inv;
 
-  /* Finish calculation of the velocity curl components */
-  p->density.rot_v[0] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
-  p->density.rot_v[1] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
-  p->density.rot_v[2] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
-
   /* Finish calculation of the velocity divergence */
-  p->density.div_v *= h_inv_dim_plus_one * rho_inv * a_inv2;
+  p->div_v *= h_inv_dim_plus_one * rho_inv * a_inv2;
 }
 
 /**
@@ -397,11 +389,15 @@ __attribute__((always_inline)) INLINE static void hydro_part_has_no_neighbours(
   p->density.wcount_dh = 0.f;
   p->density.pressure_bar_dh = 0.f;
 
-  p->density.div_v = 0.f;
-  p->density.rot_v[0] = 0.f;
-  p->density.rot_v[1] = 0.f;
-  p->density.rot_v[2] = 0.f;
+  p->div_v = 0.f;
 }
+
+/**
+ * @brief Prepare a particle for the gradient calculation.
+ */
+__attribute__((always_inline)) INLINE static void hydro_end_gradient(
+  struct part *restrict p
+) {}
 
 /**
  * @brief Prepare a particle for the force calculation.
@@ -423,20 +419,8 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
 
   const float fac_mu = cosmo->a_factor_mu;
 
-  /* Compute the norm of the curl */
-  const float curl_v = sqrtf(p->density.rot_v[0] * p->density.rot_v[0] +
-                             p->density.rot_v[1] * p->density.rot_v[1] +
-                             p->density.rot_v[2] * p->density.rot_v[2]);
-
-  /* Compute the norm of div v */
-  const float abs_div_v = fabsf(p->density.div_v);
-
   /* Compute the sound speed -- see theory section for justification */
   const float soundspeed = hydro_get_comoving_soundspeed(p);
-
-  /* Compute the Balsara switch */
-  const float balsara =
-      abs_div_v / (abs_div_v + curl_v + 0.0001f * soundspeed * fac_mu / p->h);
 
   /* Compute the "grad h" term */
   const float common_factor = p->h / (hydro_dimension * p->density.wcount);
@@ -447,7 +431,6 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
   /* Update variables. */
   p->force.f = grad_h_term;
   p->force.soundspeed = soundspeed;
-  p->force.balsara = balsara;
 }
 
 /**

@@ -92,22 +92,8 @@ __attribute__((always_inline)) INLINE static void runner_iact_density(
   dv[2] = pi->v[2] - pj->v[2];
   const float dvdr = dv[0] * dx[0] + dv[1] * dx[1] + dv[2] * dx[2];
 
-  pi->density.div_v -= faci * dvdr;
-  pj->density.div_v -= facj * dvdr;
-
-  /* Compute dv cross r */
-  curlvr[0] = dv[1] * dx[2] - dv[2] * dx[1];
-  curlvr[1] = dv[2] * dx[0] - dv[0] * dx[2];
-  curlvr[2] = dv[0] * dx[1] - dv[1] * dx[0];
-
-  pi->density.rot_v[0] += faci * curlvr[0];
-  pi->density.rot_v[1] += faci * curlvr[1];
-  pi->density.rot_v[2] += faci * curlvr[2];
-
-  /* Negative because of the change in sign of dx & dv. */
-  pj->density.rot_v[0] += facj * curlvr[0];
-  pj->density.rot_v[1] += facj * curlvr[1];
-  pj->density.rot_v[2] += facj * curlvr[2];
+  pi->div_v -= faci * dvdr;
+  pj->div_v -= facj * dvdr;
 }
 
 /**
@@ -158,16 +144,47 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_density(
   dv[2] = pi->v[2] - pj->v[2];
   const float dvdr = dv[0] * dx[0] + dv[1] * dx[1] + dv[2] * dx[2];
 
-  pi->density.div_v -= faci * dvdr;
+  pi->div_v -= faci * dvdr;
+}
 
-  /* Compute dv cross r */
-  curlvr[0] = dv[1] * dx[2] - dv[2] * dx[1];
-  curlvr[1] = dv[2] * dx[0] - dv[0] * dx[2];
-  curlvr[2] = dv[0] * dx[1] - dv[1] * dx[0];
+/**
+ * @brief Gradient interaction between two part*icles
+ * 
+ * @param r2 Comoving square distance between the two part*icles.
+ * @param dx Comoving vector separating both part*icles (pi - pj).
+ * @param hi Comoving smoothing-length of part*icle i.
+ * @param hj Comoving smoothing-length of part*icle j.
+ * @param pi First part*icle.
+ * @param pj Second part*icle.
+ * @param a Current scale factor.
+ * @param H Current Hubble parameter.
+ */
 
-  pi->density.rot_v[0] += faci * curlvr[0];
-  pi->density.rot_v[1] += faci * curlvr[1];
-  pi->density.rot_v[2] += faci * curlvr[2];
+__attribute((always_inline)) INLINE static void runner_iact_gradient(
+    float r2, const float* dx, float hi, float hj,
+    struct part *restrict pi, struct part *restrict pj,
+    float a, float H) {
+
+}
+
+/**
+ * @brief Gradient interaction between two part*icles (non-symmetric version)
+ * 
+ * @param r2 Comoving square distance between the two part*icles.
+ * @param dx Comoving vector separating both part*icles (pi - pj).
+ * @param hi Comoving smoothing-length of part*icle i.
+ * @param hj Comoving smoothing-length of part*icle j.
+ * @param pi First part*icle.
+ * @param pj Second part*icle.
+ * @param a Current scale factor.
+ * @param H Current Hubble parameter.
+ */
+
+__attribute((always_inline)) INLINE static void runner_iact_nonsym_gradient(
+    float r2, const float* dx, float hi, float hj,
+    struct part *restrict pi, struct part *restrict pj,
+    float a, float H) {
+
 }
 
 /**
@@ -236,14 +253,9 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
   const float cj = pj->force.soundspeed;
   const float v_sig = ci + cj - 3.f * mu_ij;
 
-  /* Balsara term */
-  const float balsara_i = pi->force.balsara;
-  const float balsara_j = pj->force.balsara;
-
   /* Construct the full viscosity term */
   const float rho_ij = 0.5f * (rhoi + rhoj);
-  const float visc = -0.25f * const_viscosity_alpha * v_sig * mu_ij *
-                     (balsara_i + balsara_j) / rho_ij;
+  const float visc = -0.25f * const_viscosity_alpha * v_sig * mu_ij / rho_ij;
 
   /* Convolve with the kernel */
   const float visc_acc_term = 0.5f * visc * (wi_dr + wj_dr) * r_inv;
@@ -361,14 +373,10 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
   const float cj = pj->force.soundspeed;
   const float v_sig = ci + cj - 3.f * mu_ij;
 
-  /* Balsara term */
-  const float balsara_i = pi->force.balsara;
-  const float balsara_j = pj->force.balsara;
 
   /* Construct the full viscosity term */
   const float rho_ij = 0.5f * (rhoi + rhoj);
-  const float visc = -0.25f * const_viscosity_alpha * v_sig * mu_ij *
-                     (balsara_i + balsara_j) / rho_ij;
+  const float visc = -0.25f * const_viscosity_alpha * v_sig * mu_ij / rho_ij;
 
   /* Convolve with the kernel */
   const float visc_acc_term = 0.5f * visc * (wi_dr + wj_dr) * r_inv;

@@ -98,8 +98,11 @@ struct part {
   /*! Particle pressure (weighted) */
   float pressure_bar;
 
+  /*! Velocity Divergence - we need this throughout */
+  float div_v;
+
   /* Store density/force specific stuff. */
-  union {
+  /*union {*/
 
     /**
      * @brief Structure for the variables only used in the density loop over
@@ -122,12 +125,25 @@ struct part {
       /*! Derivative of the weighted pressure with respect to h */
       float pressure_bar_dh;
 
-      /*! Particle velocity curl. */
-      float rot_v[3];
-
-      /*! Particle velocity divergence. */
-      float div_v;
     } density;
+
+
+    /**
+     * @brief Structure for the variables only used in the gradient loop over
+     * neighbours.
+     * 
+     * Quantities in this sub-structure should only be accessed in the gradient
+     * loop over neighbours and the extra ghost task.
+     */
+    struct {
+
+      /* Sound speed */
+      float soundspeed;
+      
+      /* Signal velocity */
+      float v_sig;
+
+    } gradient;
 
     /**
      * @brief Structure for the variables only used in the force loop over
@@ -150,10 +166,8 @@ struct part {
       /*! Time derivative of smoothing length  */
       float h_dt;
 
-      /*! Balsara switch */
-      float balsara;
     } force;
-  };
+  /*};*/
 
   /* Chemistry information */
   struct chemistry_part_data chemistry_data;
