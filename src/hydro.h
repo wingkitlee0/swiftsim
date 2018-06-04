@@ -66,6 +66,10 @@
 #include "./hydro/MinimalMultiMat/hydro.h"
 #include "./hydro/MinimalMultiMat/hydro_iact.h"
 #define SPH_IMPLEMENTATION "Minimal version of SPH with multiple materials"
+#elif defined(ANARCHY_PU_SPH)
+#include "./hydro/AnarchyPU/hydro.h"
+#include "./hydro/AnarchyPU/hydro_iact.h"
+#define SPH_IMPLEMENTATION "ANARCHY SPH based on Pressure-Energy SPH (Schaller+ 2015)"
 #else
 #error "Invalid choice of SPH variant"
 #endif
