@@ -72,6 +72,10 @@
 #elif defined(MINIMAL_MULTI_MAT_SPH)
 #include "./hydro/MinimalMultiMat/hydro_part.h"
 #define hydro_need_extra_init_loop 0
+#elif defined(ANARCHY_PU_SPH)
+#include "./hydro/AnarchyPU/hydro_part.h"
+#define EXTRA_HYDRO_LOOP
+#define hydro_need_extra_init_loop 0
 #else
 #error "Invalid choice of SPH variant"
 #endif
