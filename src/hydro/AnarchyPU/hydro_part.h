@@ -143,6 +143,9 @@ struct part {
       /* Signal velocity */
       float v_sig;
 
+      /* Differential of alpha */
+      float alpha_dt;
+
     } gradient;
 
     /**
