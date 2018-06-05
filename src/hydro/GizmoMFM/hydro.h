@@ -31,6 +31,7 @@
 #include "hydro_velocities.h"
 #include "minmax.h"
 #include "riemann.h"
+#include "engine.h"
 
 #include <float.h>
 
@@ -466,9 +467,10 @@ __attribute__((always_inline)) INLINE static void hydro_reset_gradient(
  * This method also initializes the force loop variables.
  *
  * @param p The particle to act upon.
+ * @param e The engine.
  */
 __attribute__((always_inline)) INLINE static void hydro_end_gradient(
-    struct part* p) {
+    struct part* p, struct engine *restrict e) {
 
   hydro_gradients_finalize(p);
 

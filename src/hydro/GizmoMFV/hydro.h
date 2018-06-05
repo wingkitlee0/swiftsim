@@ -31,6 +31,7 @@
 #include "hydro_velocities.h"
 #include "minmax.h"
 #include "riemann.h"
+#include "engine.h"
 
 #include <float.h>
 
@@ -452,9 +453,10 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_gradient(
  * in which case no gradients are used.
  *
  * @param p The particle to act upon.
+ * @param e The engine.
  */
 __attribute__((always_inline)) INLINE static void hydro_end_gradient(
-    struct part* p) {
+    struct part* p, struct engine *restrict e) {
 
   hydro_gradients_finalize(p);
 
