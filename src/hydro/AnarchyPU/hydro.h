@@ -34,6 +34,7 @@
 #include "hydro_space.h"
 #include "kernel_hydro.h"
 #include "minmax.h"
+#include "engine.h"
 
 #include <float.h>
 
@@ -424,12 +425,17 @@ __attribute__((always_inline)) INLINE static void hydro_reset_gradient(
 
 /**
  * @brief Finishes the gradient calculation.
+ * 
+ * @param p The particle to act upon
+ * @param e The engine.
  */
 __attribute__((always_inline)) INLINE static void hydro_end_gradient(
-  struct part *restrict p
+  struct part *restrict p, struct engine *restrict e,
 ) {
+
+  const float dt = get_timestep(p->time_bin, e->time_base);
   /* Calculate gradient of div_v; this is actually - d/dt divv */
-  const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt_hydro;
+  const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt;
 
   const float shock_indicator = p->h * p->h * max(0, div_v_derivative);
 
@@ -442,7 +448,7 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
   const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
 
   /* Now we have to actually update the value of alpha */
-  p->alpha += alpha_dt * dt_hydro;
+  p->alpha += alpha_dt * dt;
 }
 
 /**
