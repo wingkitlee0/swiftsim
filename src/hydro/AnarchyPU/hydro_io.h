@@ -141,7 +141,7 @@ INLINE static void hydro_write_particles(const struct part* parts,
                                          struct io_props* list,
                                          int* num_fields) {
 
-  *num_fields = 9;
+  *num_fields = 10;
 
   /* List what we want to write */
   list[0] = io_make_output_field_convert_part("Coordinates", DOUBLE, 3,
@@ -165,6 +165,7 @@ INLINE static void hydro_write_particles(const struct part* parts,
   list[8] = io_make_output_field_convert_part("Entropy", FLOAT, 1,
                                               UNIT_CONV_ENTROPY_PER_UNIT_MASS,
                                               parts, xparts, convert_S);
+  list[9] = io_make_output_field("Viscosity", FLOAT, 1, UNIT_CONV_NO_UNITS, parts, alpha);
 }
 
 /**
