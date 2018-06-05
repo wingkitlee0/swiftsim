@@ -180,7 +180,7 @@ __attribute((always_inline)) INLINE static void runner_iact_gradient(
     /* Normalize r to x_ij */
     dvdr *= r_inv;
     /* Make sure we're going in the right direction... */
-    dvdr = min(0, dvdr);
+    dvdr = min(0.f, dvdr);
 
     const float v_sig_i = soundspeed_combined - 3.f * dvdr;
     const float v_sig_j = soundspeed_combined - 3.f * dvdr;
@@ -221,7 +221,7 @@ __attribute((always_inline)) INLINE static void runner_iact_nonsym_gradient(
     /* Normalize r to x_ij */
     dvdr *= r_inv;
     /* Make sure we're going in the right direction... */
-    dvdr = min(0, dvdr);
+    dvdr = min(0.f, dvdr);
 
     const float v_sig_i = soundspeed_combined - 3.f * dvdr;
 
@@ -283,20 +283,17 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
   /* Compute dv dot r. */
   const float dvdr = (pi->v[0] - pj->v[0]) * dx[0] +
                      (pi->v[1] - pj->v[1]) * dx[1] +
-                     (pi->v[2] - pj->v[2]) * dx[2] + a2_Hubble * r2;
-
-  /* Are the part*icles moving towards each others ? */
-  const float omega_ij = min(dvdr, 0.f);
-  const float mu_ij = fac_mu * r_inv * omega_ij; /* This is 0 or negative */
+                     (pi->v[2] - pj->v[2]) * dx[2]; /*ADD ME BACK IN WHEN YOU DO COSMOLOGY + a2_Hubble * r2;*/
 
   /* Compute sound speeds and signal velocity */
   const float ci = pi->force.soundspeed;
   const float cj = pj->force.soundspeed;
-  const float v_sig = ci + cj - 3.f * mu_ij;
+  const float w_ij = min(0.f, dvdr * r_inv);
+  const float top_of_viscosity = (pi->alpha = pj->alpha) * (ci + cj - 3 * w_ij) * w_ij;
 
   /* Construct the full viscosity term */
-  const float rho_ij = 0.5f * (rhoi + rhoj);
-  const float visc = -0.25f * const_viscosity_alpha * v_sig * mu_ij / rho_ij;
+  const float rho_ij = 2.0 * (rhoi + rhoj);
+  const float visc = top_of_viscosity / rho_ij;
 
   /* Convolve with the kernel */
   const float visc_acc_term = 0.5f * visc * (wi_dr + wj_dr) * r_inv;
@@ -341,10 +338,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
   /* Get the time derivative for h. */
   pi->force.h_dt -= mj * dvdr * r_inv / rhoj * wi_dr;
   pj->force.h_dt -= mi * dvdr * r_inv / rhoi * wj_dr;
-
-  /* Update the signal velocity. */
-  pi->force.v_sig = max(pi->force.v_sig, v_sig);
-  pj->force.v_sig = max(pj->force.v_sig, v_sig);
 }
 
 /**
@@ -403,21 +396,17 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
   /* Compute dv dot r. */
   const float dvdr = (pi->v[0] - pj->v[0]) * dx[0] +
                      (pi->v[1] - pj->v[1]) * dx[1] +
-                     (pi->v[2] - pj->v[2]) * dx[2] + a2_Hubble * r2;
-
-  /* Are the part*icles moving towards each others ? */
-  const float omega_ij = min(dvdr, 0.f);
-  const float mu_ij = fac_mu * r_inv * omega_ij; /* This is 0 or negative */
+                     (pi->v[2] - pj->v[2]) * dx[2]; /*ADD ME BACK IN WHEN YOU DO COSMOLOGY + a2_Hubble * r2;*/
 
   /* Compute sound speeds and signal velocity */
   const float ci = pi->force.soundspeed;
   const float cj = pj->force.soundspeed;
-  const float v_sig = ci + cj - 3.f * mu_ij;
-
+  const float w_ij = min(0.f, dvdr * r_inv);
+  const float top_of_viscosity = (pi->alpha = pj->alpha) * (ci + cj - 3 * w_ij) * w_ij;
 
   /* Construct the full viscosity term */
-  const float rho_ij = 0.5f * (rhoi + rhoj);
-  const float visc = -0.25f * const_viscosity_alpha * v_sig * mu_ij / rho_ij;
+  const float rho_ij = 2.0 * (rhoi + rhoj);
+  const float visc = top_of_viscosity / rho_ij;
 
   /* Convolve with the kernel */
   const float visc_acc_term = 0.5f * visc * (wi_dr + wj_dr) * r_inv;
@@ -452,9 +441,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
 
   /* Get the time derivative for h. */
   pi->force.h_dt -= mj * dvdr * r_inv / rhoj * wi_dr;
-
-  /* Update the signal velocity. */
-  pi->force.v_sig = max(pi->force.v_sig, v_sig);
 }
 
 #endif /* SWIFT_MINIMAL_HYDRO_IACT_H */
