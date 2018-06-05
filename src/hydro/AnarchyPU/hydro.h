@@ -470,10 +470,13 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
 
   const float fac_mu = cosmo->a_factor_mu;
 
+  const float v_sig = p->gradient.v_sig;
+
   /* Compute the sound speed -- see theory section for justification */
   const float soundspeed = hydro_get_comoving_soundspeed(p);
 
   /* Compute the "grad h" term */
+  /* TODO: This will need re-thinking with the three way union */
   const float common_factor = p->h / (hydro_dimension * p->density.wcount);
   const float grad_h_term = (p->density.pressure_bar_dh * common_factor *
                              hydro_one_over_gamma_minus_one) /
@@ -482,6 +485,7 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
   /* Update variables. */
   p->force.f = grad_h_term;
   p->force.soundspeed = soundspeed;
+  p->force.v_sig = v_sig;
 }
 
 /**
@@ -503,7 +507,7 @@ __attribute__((always_inline)) INLINE static void hydro_reset_acceleration(
   /* Reset the time derivatives. */
   p->u_dt = 0.0f;
   p->force.h_dt = 0.0f;
-  p->force.v_sig = p->force.soundspeed;
+  p->force.v_sig = hydro_get_comoving_soundspeed(p);
 }
 
 /**
