@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
-#ifndef SWIFT_ANARCHY_PU_HYDRO_IACT_H
-#define SWIFT_ANARCHY_PU_HYDRO_IACT_H
+#ifndef SWIFT_ANARCHY_PU_HYDRO_IO_H
+#define SWIFT_ANARCHY_PU_HYDRO_IO_H
 /**
  * @file AnarchyPU/hydro_io.h
  * @brief ANARCHY SPH that tracks energy (i/o routines)
