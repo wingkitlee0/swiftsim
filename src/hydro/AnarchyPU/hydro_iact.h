@@ -166,7 +166,7 @@ __attribute((always_inline)) INLINE static void runner_iact_gradient(
     float a, float H) {
 
     /* Pull out particle properties */
-    const float soundspeed_combined = pi->soundspeed + pj->soundspeed;
+    const float soundspeed_combined = pi->gradient.soundspeed + pj->gradient.soundspeed;
 
     /* Compute dv dot x_ij */
     const float r_inv = 1.f / sqrtf(r2);
@@ -185,8 +185,8 @@ __attribute((always_inline)) INLINE static void runner_iact_gradient(
     const float v_sig_i = soundspeed_combined - 3.f * dvdr;
     const float v_sig_j = soundspeed_combined - 3.f * dvdr;
 
-    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig_i)
-    pj->gradient.v_sig = max(pj->gradient.v_sig, v_sig_j)
+    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig_i);
+    pj->gradient.v_sig = max(pj->gradient.v_sig, v_sig_j);
 }
 
 /**
@@ -207,7 +207,7 @@ __attribute((always_inline)) INLINE static void runner_iact_nonsym_gradient(
     struct part *restrict pi, struct part *restrict pj,
     float a, float H) {
     /* Pull out particle properties */
-    const float soundspeed_combined = pi->soundspeed + pj->soundspeed;
+    const float soundspeed_combined = pi->gradient.soundspeed + pj->gradient.soundspeed;
 
     /* Compute dv dot x_ij */
     const float r_inv = 1.f / sqrtf(r2);
@@ -225,7 +225,7 @@ __attribute((always_inline)) INLINE static void runner_iact_nonsym_gradient(
 
     const float v_sig_i = soundspeed_combined - 3.f * dvdr;
 
-    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig_i)
+    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig_i);
 }
 
 /**

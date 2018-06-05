@@ -417,7 +417,7 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_gradient(
  * @brief Resets gradient values
  */
 __attribute__((always_inline)) INLINE static void hydro_reset_gradient(
-  part *restrict p) {
+  struct part *restrict p) {
 
     /* Zero some quantities */
     p->gradient.v_sig = 0.f;
@@ -430,8 +430,7 @@ __attribute__((always_inline)) INLINE static void hydro_reset_gradient(
  * @param e The engine.
  */
 __attribute__((always_inline)) INLINE static void hydro_end_gradient(
-  struct part *restrict p, struct engine *restrict e,
-) {
+  struct part *restrict p, const struct engine *restrict e) {
 
   const float dt = get_timestep(p->time_bin, e->time_base);
   /* Calculate gradient of div_v; this is actually - d/dt divv */
@@ -439,11 +438,11 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
 
   const float shock_indicator = p->h * p->h * max(0, div_v_derivative);
 
-  const float alpha_max = 1.0; /* Again, a config option. */
-  const float alpha_loc = alpha_max * shock_indicator / (p->v_sig * p->v_sig + shock_indicator);
+  const float alpha_max = 2.0; /* Again, a config option. */
+  const float alpha_loc = alpha_max * shock_indicator / (p->gradient.v_sig * p->gradient.v_sig + shock_indicator);
 
-  const float l = 0.01; /* This should be moved to being a config option. */
-  const float inverse_tau = 2 * l * p->v_sig / p->h
+  const float l = 0.1; /* This should be moved to being a config option. */
+  const float inverse_tau = 2 * l * p->gradient.v_sig / p->h;
 
   const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
 
