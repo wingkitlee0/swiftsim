@@ -314,6 +314,8 @@ __attribute__((always_inline)) INLINE static void hydro_init_part(
   p->density.rho_dh = 0.f;
   p->pressure_bar = 0.f;
   p->density.pressure_bar_dh = 0.f;
+  /* Cache result for calculation of gradient */
+  p->density.old_div_v = p->div_v;
 
   p->div_v = 0.f;
 }
@@ -392,15 +394,56 @@ __attribute__((always_inline)) INLINE static void hydro_part_has_no_neighbours(
   p->density.wcount_dh = 0.f;
   p->density.pressure_bar_dh = 0.f;
 
+  p->density.old_div_v = 0.f;
   p->div_v = 0.f;
 }
 
 /**
  * @brief Prepare a particle for the gradient calculation.
  */
+__attribute__((always_inline)) INLINE static void hydro_prepare_gradient(
+    struct part *restrict p, struct xpart *restrict xp,
+    const struct cosmology *cosmo) {
+      /* Grab the soundspeed */
+      const float soundspeed = hydro_get_comoving_soundspeed(p);
+      const float old_div_v = p->density.old_div_v;
+
+      p->gradient.soundspeed = soundspeed;
+      p->gradient.old_div_v = old_div_v;
+    }
+
+/**
+ * @brief Resets gradient values
+ */
+__attribute__((always_inline)) INLINE static void hydro_reset_gradient(
+  part *restrict p) {
+
+    /* Zero some quantities */
+    p->gradient.v_sig = 0.f;
+  }
+
+/**
+ * @brief Finishes the gradient calculation.
+ */
 __attribute__((always_inline)) INLINE static void hydro_end_gradient(
   struct part *restrict p
-) {}
+) {
+  /* Calculate gradient of div_v; this is actually - d/dt divv */
+  const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt_hydro;
+
+  const float shock_indicator = p->h * p->h * max(0, div_v_derivative);
+
+  const float alpha_max = 1.0; /* Again, a config option. */
+  const float alpha_loc = alpha_max * shock_indicator / (p->v_sig * p->v_sig + shock_indicator);
+
+  const float l = 0.01; /* This should be moved to being a config option. */
+  const float inverse_tau = 2 * l * p->v_sig / p->h
+
+  const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
+
+  /* Now we have to actually update the value of alpha */
+  p->alpha += alpha_dt * dt_hydro;
+}
 
 /**
  * @brief Prepare a particle for the force calculation.
@@ -609,6 +652,12 @@ __attribute__((always_inline)) INLINE static void hydro_first_init_part(
   xp->u_full = p->u;
 
   hydro_reset_acceleration(p);
+
+  /* Ensure velocity divergence does not go un-initialised */
+  p->div_v = 0.f;
+  /* Start everyone out with minimal viscosity for now */
+  p-> alpha = 0.05;
+  /* TODO: Read this from file? */
   hydro_init_part(p, NULL);
 }
 

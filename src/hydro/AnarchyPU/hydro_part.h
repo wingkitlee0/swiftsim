@@ -101,6 +101,9 @@ struct part {
   /*! Velocity Divergence - we need this throughout */
   float div_v;
 
+  /*! Viscosity */
+  float alpha;
+
   /* Store density/force specific stuff. */
   /*union {*/
 
@@ -125,6 +128,9 @@ struct part {
       /*! Derivative of the weighted pressure with respect to h */
       float pressure_bar_dh;
 
+      /*! Old velocity divergence, needed for gradient loop */
+      float old_div_v;
+
     } density;
 
 
@@ -143,8 +149,8 @@ struct part {
       /* Signal velocity */
       float v_sig;
 
-      /* Differential of alpha */
-      float alpha_dt;
+      /*! Old velocity divergence, needed for gradient loop */
+      float old_div_v;
 
     } gradient;
 
