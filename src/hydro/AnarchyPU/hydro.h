@@ -143,7 +143,11 @@ hydro_get_comoving_soundspeed(const struct part *restrict p) {
 
   /* Compute the sound speed -- see theory section for justification */
   /* IDEAL GAS ONLY -- P-U does not work with generic EoS. */
-  return gas_soundspeed_from_pressure(p->rho, p->pressure_bar);
+  if (p->rho > FLT_MIN) {
+      return sqrtf(hydro_gamma * p->pressure_bar / p->rho);
+  } else {
+      return 0.f;
+  }
 }
 
 /**
@@ -433,21 +437,24 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
   struct part *restrict p, const struct engine *restrict e) {
 
   const float dt = get_timestep(p->time_bin, e->time_base);
-  /* Calculate gradient of div_v; this is actually - d/dt divv */
-  const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt;
+  
+  if (dt != 0.f) {
+    /* Calculate gradient of div_v; this is actually - d/dt divv */
+    const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt;
 
-  const float shock_indicator = p->h * p->h * max(0, div_v_derivative);
+    const float shock_indicator = p->h * p->h * max(0, div_v_derivative);
 
-  const float alpha_max = 2.0; /* Again, a config option. */
-  const float alpha_loc = alpha_max * shock_indicator / (p->gradient.v_sig * p->gradient.v_sig + shock_indicator);
+    const float alpha_max = 2.0; /* Again, a config option. */
+    const float alpha_loc = alpha_max * shock_indicator / (p->gradient.v_sig * p->gradient.v_sig + shock_indicator);
 
-  const float l = 0.1; /* This should be moved to being a config option. */
-  const float inverse_tau = 2 * l * p->gradient.v_sig / p->h;
+    const float l = 0.1; /* This should be moved to being a config option. */
+    const float inverse_tau = 2 * l * p->gradient.v_sig / p->h;
 
-  const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
+    const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
 
-  /* Now we have to actually update the value of alpha */
-  p->alpha += alpha_dt * dt;
+    /* Now we have to actually update the value of alpha */
+    p->alpha += alpha_dt * dt;
+  }
 }
 
 /**
@@ -468,7 +475,7 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
     struct part *restrict p, struct xpart *restrict xp,
     const struct cosmology *cosmo) {
 
-  const float fac_mu = cosmo->a_factor_mu;
+  /*const float fac_mu = cosmo->a_factor_mu;*/
 
   const float v_sig = p->gradient.v_sig;
 

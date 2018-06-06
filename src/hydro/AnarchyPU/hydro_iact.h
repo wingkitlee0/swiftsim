@@ -45,7 +45,7 @@ __attribute__((always_inline)) INLINE static void runner_iact_density(
     struct part* pj, float a, float H) {
 
   float wi, wj, wi_dx, wj_dx;
-  float dv[3], curlvr[3];
+  float dv[3];
 
   const float r = sqrtf(r2);
 
@@ -113,7 +113,7 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_density(
     const struct part* pj, float a, float H) {
 
   float wi, wi_dx;
-  float dv[3], curlvr[3];
+  float dv[3];
 
   /* Get the masses. */
   const float mj = pj->mass;
@@ -245,8 +245,10 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
     struct part* pj, float a, float H) {
 
   /* Cosmological factors entering the EoMs */
+  /*
   const float fac_mu = pow_three_gamma_minus_five_over_two(a);
   const float a2_Hubble = a * a * H;
+  */
 
   const float r = sqrtf(r2);
   const float r_inv = 1.0f / r;
@@ -289,14 +291,14 @@ __attribute__((always_inline)) INLINE static void runner_iact_force(
   const float ci = pi->force.soundspeed;
   const float cj = pj->force.soundspeed;
   const float w_ij = min(0.f, dvdr * r_inv);
-  const float top_of_viscosity = (pi->alpha = pj->alpha) * (ci + cj - 3 * w_ij) * w_ij;
+  const float top_of_viscosity = (pi->alpha + pj->alpha) * (3 * w_ij - ci - cj) * w_ij;
 
   /* Construct the full viscosity term */
   const float rho_ij = 2.0 * (rhoi + rhoj);
   const float visc = top_of_viscosity / rho_ij;
 
   /* Convolve with the kernel */
-  const float visc_acc_term = 0.5f * visc * (wi_dr + wj_dr) * r_inv;
+  const float visc_acc_term = visc * (wi_dr + wj_dr) * r_inv;
 
   /* SPH acceleration term */
   const float sph_acc_term =
@@ -357,8 +359,10 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
     const struct part* pj, float a, float H) {
 
   /* Cosmological factors entering the EoMs */
+  /*
   const float fac_mu = pow_three_gamma_minus_five_over_two(a);
   const float a2_Hubble = a * a * H;
+  */
 
   const float r = sqrtf(r2);
   const float r_inv = 1.0f / r;
@@ -402,7 +406,7 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
   const float ci = pi->force.soundspeed;
   const float cj = pj->force.soundspeed;
   const float w_ij = min(0.f, dvdr * r_inv);
-  const float top_of_viscosity = (pi->alpha = pj->alpha) * (ci + cj - 3 * w_ij) * w_ij;
+  const float top_of_viscosity = (pi->alpha + pj->alpha) * (3 * w_ij - ci - cj) * w_ij;
 
   /* Construct the full viscosity term */
   const float rho_ij = 2.0 * (rhoi + rhoj);
