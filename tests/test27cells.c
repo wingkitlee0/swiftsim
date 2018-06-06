@@ -263,7 +263,7 @@ void dump_particle_fields(char *fileName, struct cell *main_cell,
             hydro_get_comoving_density(&main_cell->parts[pid]),
 #if defined(GIZMO_MFV_SPH) || defined(SHADOWFAX_SPH)
             0.f,
-#elif defined(HOPKINS_PU_SPH)
+#elif defined(HOPKINS_PU_SPH) || defined(ANARCHY_PU_SPH)
             main_cell->parts[pid].density.pressure_bar_dh,
 #else
             main_cell->parts[pid].density.rho_dh,
@@ -276,6 +276,8 @@ void dump_particle_fields(char *fileName, struct cell *main_cell,
             main_cell->parts[pid].density.rot_v[0],
             main_cell->parts[pid].density.rot_v[1],
             main_cell->parts[pid].density.rot_v[2]
+#elif defined(ANARCHY_SPH)
+            main_cell->parts[pid].density.div_v, 0., 0., 0.
 #else
             0., 0., 0., 0.
 #endif

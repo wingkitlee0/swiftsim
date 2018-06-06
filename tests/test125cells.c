@@ -118,7 +118,7 @@ void set_energy_state(struct part *part, enum pressure_field press, float size,
   part->entropy = pressure / pow_gamma(density);
 #elif defined(DEFAULT_SPH)
   part->u = pressure / (hydro_gamma_minus_one * density);
-#elif defined(MINIMAL_SPH) || defined(HOPKINS_PU_SPH)
+#elif defined(MINIMAL_SPH) || defined(HOPKINS_PU_SPH) || defined(ANARCHY_PU_SPH)
   part->u = pressure / (hydro_gamma_minus_one * density);
 #elif defined(MINIMAL_MULTI_MAT_SPH)
   part->u = pressure / (hydro_gamma_minus_one * density);
@@ -407,7 +407,7 @@ void dump_particle_fields(char *fileName, struct cell *main_cell,
             hydro_get_comoving_density(&main_cell->parts[pid]),
 #if defined(MINIMAL_SPH) || defined(MINIMAL_MULTI_MAT_SPH) || \
     defined(GIZMO_MFV_SPH) || defined(SHADOWFAX_SPH) ||       \
-    defined(HOPKINS_PU_SPH)
+    defined(HOPKINS_PU_SPH) || defined(ANARCHY_PU_SPH)
             0.f,
 #else
             main_cell->parts[pid].density.div_v,
@@ -424,7 +424,7 @@ void dump_particle_fields(char *fileName, struct cell *main_cell,
 #elif defined(DEFAULT_SPH)
             main_cell->parts[pid].force.v_sig, 0.f,
             main_cell->parts[pid].force.u_dt
-#elif defined(MINIMAL_SPH) || defined(HOPKINS_PU_SPH)
+#elif defined(MINIMAL_SPH) || defined(HOPKINS_PU_SPH) || defined(ANARCHY_PU_SPH)
             main_cell->parts[pid].force.v_sig, 0.f, main_cell->parts[pid].u_dt
 #else
             0.f, 0.f, 0.f
