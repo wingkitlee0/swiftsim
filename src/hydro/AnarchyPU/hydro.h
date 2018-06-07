@@ -144,9 +144,9 @@ hydro_get_comoving_soundspeed(const struct part *restrict p) {
   /* Compute the sound speed -- see theory section for justification */
   /* IDEAL GAS ONLY -- P-U does not work with generic EoS. */
   if (p->rho > FLT_MIN) {
-      return sqrtf(hydro_gamma * p->pressure_bar / p->rho);
+    return gas_soundspeed_from_pressure(p->rho, p->pressure_bar);
   } else {
-      return 0.f;
+    return 0.f;
   }
 }
 
@@ -399,6 +399,7 @@ __attribute__((always_inline)) INLINE static void hydro_part_has_no_neighbours(
   p->density.wcount_dh = 0.f;
   p->density.pressure_bar_dh = 0.f;
 
+  /* Probably best to not change the viscosity */
   p->density.old_div_v = 0.f;
   p->div_v = 0.f;
 }
@@ -437,12 +438,14 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
   struct part *restrict p, const struct engine *restrict e) {
 
   const float dt = get_timestep(p->time_bin, e->time_base);
-  
+
   if (dt != 0.f) {
     /* Calculate gradient of div_v; this is actually - d/dt divv */
     const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt;
 
-    const float shock_indicator = p->h * p->h * max(0, div_v_derivative);
+    /* I believe in C&D 2010 they define h as the FWHM */
+    const float kernel_width = kernel_gamma2 * p->h * p->h;
+    const float shock_indicator = kernel_width * max(0, div_v_derivative);
 
     const float alpha_max = 2.0; /* Again, a config option. */
     const float alpha_loc = alpha_max * shock_indicator / (p->gradient.v_sig * p->gradient.v_sig + shock_indicator);
@@ -452,13 +455,21 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
     } else {
       /* Decay */
 
-      const float l = 0.1; /* This should be moved to being a config option. */
-      const float inverse_tau = 2 * l * p->gradient.v_sig / p->h;
+      const float l = 0.05; /* This should be moved to being a config option. */
+      const float inverse_tau = 2 * l * p->gradient.v_sig / (p->h * kernel_gamma);
 
       const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
 
       /* Now we have to actually update the value of alpha */
-      p->alpha += alpha_dt * dt;
+      const float new_alpha = p->alpha + alpha_dt * dt;
+
+      const float alpha_min = 0.05;
+
+      if (new_alpha < alpha_min) {
+        p->alpha = alpha_min;
+      } else {
+        p-> alpha = new_alpha;
+      }
     }
   }
 }
@@ -486,7 +497,7 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_force(
   const float v_sig = p->gradient.v_sig;
 
   /* Compute the sound speed -- see theory section for justification */
-  const float soundspeed = hydro_get_comoving_soundspeed(p);
+  const float soundspeed = p->gradient.soundspeed;
 
   /* Compute the "grad h" term */
   /* TODO: This will need re-thinking with the three way union */
@@ -520,7 +531,6 @@ __attribute__((always_inline)) INLINE static void hydro_reset_acceleration(
   /* Reset the time derivatives. */
   p->u_dt = 0.0f;
   p->force.h_dt = 0.0f;
-  p->force.v_sig = hydro_get_comoving_soundspeed(p);
 }
 
 /**
@@ -678,7 +688,7 @@ __attribute__((always_inline)) INLINE static void hydro_first_init_part(
   /* Ensure velocity divergence does not go un-initialised */
   p->div_v = 0.f;
   /* Start everyone out with minimal viscosity for now */
-  p-> alpha = 0.f;
+  p->alpha = 0.05;
   /* TODO: Read this from file? */
   hydro_init_part(p, NULL);
 }

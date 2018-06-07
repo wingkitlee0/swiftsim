@@ -182,11 +182,10 @@ __attribute((always_inline)) INLINE static void runner_iact_gradient(
     /* Make sure we're going in the right direction... */
     dvdr = min(0.f, dvdr);
 
-    const float v_sig_i = soundspeed_combined - 3.f * dvdr;
-    const float v_sig_j = soundspeed_combined - 3.f * dvdr;
+    const float v_sig = 0.5f * soundspeed_combined - dvdr;
 
-    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig_i);
-    pj->gradient.v_sig = max(pj->gradient.v_sig, v_sig_j);
+    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig);
+    pj->gradient.v_sig = max(pj->gradient.v_sig, v_sig);
 }
 
 /**
@@ -223,9 +222,9 @@ __attribute((always_inline)) INLINE static void runner_iact_nonsym_gradient(
     /* Make sure we're going in the right direction... */
     dvdr = min(0.f, dvdr);
 
-    const float v_sig_i = soundspeed_combined - 3.f * dvdr;
+    const float v_sig = 0.5f * soundspeed_combined - dvdr;
 
-    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig_i);
+    pi->gradient.v_sig = max(pi->gradient.v_sig, v_sig);
 }
 
 /**
@@ -406,10 +405,10 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
   const float ci = pi->force.soundspeed;
   const float cj = pj->force.soundspeed;
   const float w_ij = min(0.f, dvdr * r_inv);
-  const float top_of_viscosity = (pi->alpha + pj->alpha) * (3 * w_ij - ci - cj) * w_ij;
+  const float top_of_viscosity = (pi->alpha + pj->alpha) * (3.f * w_ij - ci - cj) * w_ij;
 
   /* Construct the full viscosity term */
-  const float rho_ij = 2.0 * (rhoi + rhoj);
+  const float rho_ij = 2.f * (rhoi + rhoj);
   const float visc = top_of_viscosity / rho_ij;
 
   /* Convolve with the kernel */
