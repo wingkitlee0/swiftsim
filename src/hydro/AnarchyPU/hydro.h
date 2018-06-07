@@ -368,6 +368,11 @@ __attribute__((always_inline)) INLINE static void hydro_end_density(
 
   /* Finish calculation of the velocity divergence */
   p->div_v *= h_inv_dim_plus_one * rho_inv * a_inv2;
+
+  /* Finish calculation of the velocity curl components */
+  p->density.rot_v[0] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
+  p->density.rot_v[1] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
+  p->density.rot_v[2] *= h_inv_dim_plus_one * a_inv2 * rho_inv;
 }
 
 /**
@@ -412,8 +417,16 @@ __attribute__((always_inline)) INLINE static void hydro_prepare_gradient(
     const struct cosmology *cosmo) {
       /* Grab the soundspeed */
       const float soundspeed = hydro_get_comoving_soundspeed(p);
+
+      /* Carry this property over from the density union */
       const float old_div_v = p->density.old_div_v;
 
+      /* Get the norm of the curl */
+      p->gradient.curl_norm = p->density.rot_v[0] * p->density.rot_v[0] +
+                              p->density.rot_v[1] * p->density.rot_v[1] + 
+                              p->density.rot_v[2] * p->density.rot_v[2];
+
+      /* Set new properties */
       p->gradient.soundspeed = soundspeed;
       p->gradient.old_div_v = old_div_v;
     }
@@ -426,6 +439,7 @@ __attribute__((always_inline)) INLINE static void hydro_reset_gradient(
 
     /* Zero some quantities */
     p->gradient.v_sig = 0.f;
+    p->gradient.R = 0.f;
   }
 
 /**
@@ -437,15 +451,29 @@ __attribute__((always_inline)) INLINE static void hydro_reset_gradient(
 __attribute__((always_inline)) INLINE static void hydro_end_gradient(
   struct part *restrict p, const struct engine *restrict e) {
 
+  /* Finish off R */
+  p->gradient.R /= p->rho * pow_dimension(p->h);
+
+  /* Construct switch */
+
+  const float one_minus_R = 1.f - p->gradient.R;
+  const float one_minus_R_squared = one_minus_R * one_minus_R;
+  const float one_minus_R_four = one_minus_R_squared * one_minus_R_squared;
+
+  const float sqrt_top = 2.f * one_minus_R_four * p->div_v;
+  const float top = sqrt_top * sqrt_top;
+
+  const float new_switch = top / (top * p->gradient.curl_norm);
+
   const float dt = get_timestep(p->time_bin, e->time_base);
 
   if (dt != 0.f) {
     /* Calculate gradient of div_v; this is actually - d/dt divv */
     const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt;
 
-    /* I believe in C&D 2010 they define h as the FWHM */
+    /* I believe in C&D 2010 they define h as the cut-off radius */
     const float kernel_width = kernel_gamma2 * p->h * p->h;
-    const float shock_indicator = kernel_width * max(0, div_v_derivative);
+    const float shock_indicator = new_switch * kernel_width * max(0, div_v_derivative);
 
     const float alpha_max = 2.0; /* Again, a config option. */
     const float alpha_loc = alpha_max * shock_indicator / (p->gradient.v_sig * p->gradient.v_sig + shock_indicator);
@@ -463,7 +491,7 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
       /* Now we have to actually update the value of alpha */
       const float new_alpha = p->alpha + alpha_dt * dt;
 
-      const float alpha_min = 0.05;
+      const float alpha_min = 0.f;
 
       if (new_alpha < alpha_min) {
         p->alpha = alpha_min;

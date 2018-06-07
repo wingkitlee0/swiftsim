@@ -131,6 +131,9 @@ struct part {
       /*! Old velocity divergence, needed for gradient loop */
       float old_div_v;
 
+      /* Curl */
+      float rot_v[3];
+
     } density;
 
 
@@ -151,6 +154,10 @@ struct part {
 
       /*! Old velocity divergence, needed for gradient loop */
       float old_div_v;
+
+      float curl_norm;
+
+      float R;
 
     } gradient;
 

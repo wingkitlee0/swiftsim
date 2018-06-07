@@ -45,7 +45,7 @@ __attribute__((always_inline)) INLINE static void runner_iact_density(
     struct part* pj, float a, float H) {
 
   float wi, wj, wi_dx, wj_dx;
-  float dv[3];
+  float dv[3], curlvr[3];
 
   const float r = sqrtf(r2);
 
@@ -94,6 +94,20 @@ __attribute__((always_inline)) INLINE static void runner_iact_density(
 
   pi->div_v -= faci * dvdr;
   pj->div_v -= facj * dvdr;
+
+    /* Compute dv cross r */
+  curlvr[0] = dv[1] * dx[2] - dv[2] * dx[1];
+  curlvr[1] = dv[2] * dx[0] - dv[0] * dx[2];
+  curlvr[2] = dv[0] * dx[1] - dv[1] * dx[0];
+
+  pi->density.rot_v[0] += faci * curlvr[0];
+  pi->density.rot_v[1] += faci * curlvr[1];
+  pi->density.rot_v[2] += faci * curlvr[2];
+
+  /* Negative because of the change in sign of dx & dv. */
+  pj->density.rot_v[0] += facj * curlvr[0];
+  pj->density.rot_v[1] += facj * curlvr[1];
+  pj->density.rot_v[2] += facj * curlvr[2];
 }
 
 /**
@@ -113,7 +127,7 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_density(
     const struct part* pj, float a, float H) {
 
   float wi, wi_dx;
-  float dv[3];
+  float dv[3], curlvr[3];
 
   /* Get the masses. */
   const float mj = pj->mass;
@@ -145,6 +159,15 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_density(
   const float dvdr = dv[0] * dx[0] + dv[1] * dx[1] + dv[2] * dx[2];
 
   pi->div_v -= faci * dvdr;
+
+  /* Compute dv cross r */
+  curlvr[0] = dv[1] * dx[2] - dv[2] * dx[1];
+  curlvr[1] = dv[2] * dx[0] - dv[0] * dx[2];
+  curlvr[2] = dv[0] * dx[1] - dv[1] * dx[0];
+
+  pi->density.rot_v[0] += faci * curlvr[0];
+  pi->density.rot_v[1] += faci * curlvr[1];
+  pi->density.rot_v[2] += faci * curlvr[2];
 }
 
 /**
@@ -165,11 +188,29 @@ __attribute((always_inline)) INLINE static void runner_iact_gradient(
     struct part *restrict pi, struct part *restrict pj,
     float a, float H) {
 
+    const float r_inv = 1.f / sqrtf(r2);
+
+    /* Get kernel for calculation of R */
+    float ui, wi, wi_dx, uj, wj, wj_dx;
+
+    ui = hi * r_inv;
+    uj = hj * r_inv;
+
+    kernel_deval(ui, &wi, &wi_dx);
+    kernel_deval(uj, &wj, &wj_dx);
+
+    const float sgn_i = (pi->div_v > 0) ? 1 : ((pi->div_v < 0) ? -1 : 0);
+    const float sgn_j = (pj->div_v > 0) ? 1 : ((pj->div_v < 0) ? -1 : 0);
+
+    /* Construct R */
+
+    pi->gradient.R += sgn_i * pi->mass * wi;
+    pj->gradient.R += sgn_j * pj->mass * wj;
+
+    /* Compute the signal velocity */
+
     /* Pull out particle properties */
     const float soundspeed_combined = pi->gradient.soundspeed + pj->gradient.soundspeed;
-
-    /* Compute dv dot x_ij */
-    const float r_inv = 1.f / sqrtf(r2);
 
     float dvdr, dv[3];
     dv[0] = pi->v[0] - pj->v[0];
@@ -205,11 +246,25 @@ __attribute((always_inline)) INLINE static void runner_iact_nonsym_gradient(
     float r2, const float* dx, float hi, float hj,
     struct part *restrict pi, struct part *restrict pj,
     float a, float H) {
-    /* Pull out particle properties */
-    const float soundspeed_combined = pi->gradient.soundspeed + pj->gradient.soundspeed;
 
     /* Compute dv dot x_ij */
     const float r_inv = 1.f / sqrtf(r2);
+
+    /* Get kernel for calculation of R */
+    float ui, wi, wi_dx;
+
+    ui = hi * r_inv;
+
+    kernel_deval(ui, &wi, &wi_dx);
+    const float sgn_i = (pi->div_v > 0) ? 1 : ((pi->div_v < 0) ? -1 : 0);
+
+    /* Construct R */
+
+    pi->gradient.R += sgn_i * pi->mass * wi;
+
+    /* Calculate the signal velocity */
+    /* Pull out particle properties */
+    const float soundspeed_combined = pi->gradient.soundspeed + pj->gradient.soundspeed;
 
     float dvdr, dv[3];
     dv[0] = pi->v[0] - pj->v[0];
