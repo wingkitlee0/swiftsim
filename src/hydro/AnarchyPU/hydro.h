@@ -447,13 +447,19 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
     const float alpha_max = 2.0; /* Again, a config option. */
     const float alpha_loc = alpha_max * shock_indicator / (p->gradient.v_sig * p->gradient.v_sig + shock_indicator);
 
-    const float l = 0.1; /* This should be moved to being a config option. */
-    const float inverse_tau = 2 * l * p->gradient.v_sig / p->h;
+    if (p->alpha < alpha_loc) {
+      p->alpha = alpha_loc;
+    } else {
+      /* Decay */
 
-    const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
+      const float l = 0.1; /* This should be moved to being a config option. */
+      const float inverse_tau = 2 * l * p->gradient.v_sig / p->h;
 
-    /* Now we have to actually update the value of alpha */
-    p->alpha += alpha_dt * dt;
+      const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
+
+      /* Now we have to actually update the value of alpha */
+      p->alpha += alpha_dt * dt;
+    }
   }
 }
 
@@ -672,7 +678,7 @@ __attribute__((always_inline)) INLINE static void hydro_first_init_part(
   /* Ensure velocity divergence does not go un-initialised */
   p->div_v = 0.f;
   /* Start everyone out with minimal viscosity for now */
-  p-> alpha = 0.05;
+  p-> alpha = 0.f;
   /* TODO: Read this from file? */
   hydro_init_part(p, NULL);
 }
