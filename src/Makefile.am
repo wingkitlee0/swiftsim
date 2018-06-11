@@ -129,6 +129,7 @@ nobase_noinst_HEADERS = align.h approx_math.h atomic.h barrier.h cycle.h error.h
 	         potential/none/potential.h potential/point_mass/potential.h \
                  potential/isothermal/potential.h potential/disc_patch/potential.h \
                  potential/sine_wave/potential.h \
+                 potential/spiral_galaxy/potential.h \
 		 cooling/none/cooling.h cooling/none/cooling_struct.h \
                  cooling/none/cooling_io.h \
 	         cooling/const_du/cooling.h cooling/const_du/cooling_struct.h \
