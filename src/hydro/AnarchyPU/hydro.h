@@ -141,13 +141,12 @@ __attribute__((always_inline)) INLINE static float hydro_get_physical_entropy(
 __attribute__((always_inline)) INLINE static float
 hydro_get_comoving_soundspeed(const struct part *restrict p) {
 
-  /* Compute the sound speed -- see theory section for justification */
-  /* IDEAL GAS ONLY -- P-U does not work with generic EoS. */
-  if (p->rho > FLT_MIN) {
-    return gas_soundspeed_from_pressure(p->rho, p->pressure_bar);
-  } else {
-    return 0.f;
-  }
+  /* We need to compute the soundspeed here rather than read from particle 
+     properties because of the triple union */
+  const float soundspeed =
+    (p->rho != 0.0f) ? gas_soundspeed_from_pressure(p->rho, p->pressure_bar) : FLT_MAX;
+
+  return soundspeed;
 }
 
 /**
@@ -319,9 +318,13 @@ __attribute__((always_inline)) INLINE static void hydro_init_part(
   p->density.rho_dh = 0.f;
   p->pressure_bar = 0.f;
   p->density.pressure_bar_dh = 0.f;
+
+  p->density.rot_v[0] = 0.f;
+  p->density.rot_v[1] = 0.f;
+  p->density.rot_v[2] = 0.f;
+
   /* Cache result for calculation of gradient */
   p->density.old_div_v = p->div_v;
-
   p->div_v = 0.f;
 }
 
@@ -404,6 +407,9 @@ __attribute__((always_inline)) INLINE static void hydro_part_has_no_neighbours(
   p->density.wcount_dh = 0.f;
   p->density.pressure_bar_dh = 0.f;
 
+  p->density.rot_v[0] = 0.f;
+  p->density.rot_v[1] = 0.f;
+  p->density.rot_v[2] = 0.f;
   /* Probably best to not change the viscosity */
   p->density.old_div_v = 0.f;
   p->div_v = 0.f;
@@ -452,26 +458,27 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
   struct part *restrict p, const struct engine *restrict e) {
 
   /* Finish off R */
-  p->gradient.R /= p->rho * pow_dimension(p->h);
-
-  /* Construct switch */
-
-  const float one_minus_R = 1.f - p->gradient.R;
-  const float one_minus_R_squared = one_minus_R * one_minus_R;
-  const float one_minus_R_four = one_minus_R_squared * one_minus_R_squared;
-
-  const float sqrt_top = 2.f * one_minus_R_four * p->div_v;
-  const float top = sqrt_top * sqrt_top;
-
-  const float new_switch = top / (top * p->gradient.curl_norm);
+  p->gradient.R /= (p->rho * pow_dimension(p->h));
 
   const float dt = get_timestep(p->time_bin, e->time_base);
 
+  /* Sometimes we get a time-step of 0, this causes problems!
+     Best to just skip updating the viscosity in that case. */
   if (dt != 0.f) {
+    /* Construct switch */
+    const float one_minus_R = 1.f - p->gradient.R;
+    const float one_minus_R_squared = one_minus_R * one_minus_R;
+    const float one_minus_R_four = one_minus_R_squared * one_minus_R_squared;
+
+    const float sqrt_top = 2.f * one_minus_R_four * p->div_v;
+    const float top = sqrt_top * sqrt_top;
+
+    const float new_switch = top / (top + p->gradient.curl_norm);
+
     /* Calculate gradient of div_v; this is actually - d/dt divv */
     const float div_v_derivative = (p->gradient.old_div_v - p->div_v) / dt;
 
-    /* I believe in C&D 2010 they define h as the cut-off radius */
+    /* The kernel gamma needs to enter here to be consistent with gadgetoids */
     const float kernel_width = kernel_gamma2 * p->h * p->h;
     const float shock_indicator = new_switch * kernel_width * max(0, div_v_derivative);
 
@@ -482,16 +489,16 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
       p->alpha = alpha_loc;
     } else {
       /* Decay */
-
       const float l = 0.05; /* This should be moved to being a config option. */
-      const float inverse_tau = 2 * l * p->gradient.v_sig / (p->h * kernel_gamma);
+      const float inverse_tau = 2.0 * l * p->gradient.v_sig / (p->h * kernel_gamma);
 
       const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
 
       /* Now we have to actually update the value of alpha */
       const float new_alpha = p->alpha + alpha_dt * dt;
 
-      const float alpha_min = 0.f;
+      /* Config option ideally. Also, we shouldn't need this. */
+      const float alpha_min = 0.00f;
 
       if (new_alpha < alpha_min) {
         p->alpha = alpha_min;
