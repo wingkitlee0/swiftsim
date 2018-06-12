@@ -174,6 +174,44 @@ void test(void) {
     error("Particles 'pj' do not match after density (byte = %d)", j_not_ok);
   }
 
+#ifdef EXTRA_HYDRO_LOOP 
+#ifdef ANARCHY_PU_SPH  /* Best to leave out GIZMO for now. */
+  /* --- Test the gradient loop --- */
+
+  /* Call the symmetric version */
+  runner_iact_gradient(r2, dx, pi.h, pj.h, &pi, &pj, a, H);
+
+  /* Call the non-symmetric version */
+  runner_iact_nonsym_gradient(r2, dx, pi2.h, pj2.h, &pi2, &pj2, a, H);
+  dx[0] = -dx[0];
+  dx[1] = -dx[1];
+  dx[2] = -dx[2];
+  runner_iact_nonsym_gradient(r2, dx, pj2.h, pi2.h, &pj2, &pi2, a, H);
+
+  /* Check for symmetry */
+  i_not_ok =
+      strncmp((const char *)&pi, (const char *)&pi2, sizeof(struct part));
+  j_not_ok =
+      strncmp((const char *)&pj, (const char *)&pj2, sizeof(struct part));
+
+  if (i_not_ok) {
+    printParticle_single(&pi, &xpi);
+    printParticle_single(&pi2, &xpi);
+    print_bytes(&pj, sizeof(struct part));
+    print_bytes(&pj2, sizeof(struct part));
+    error("Particles 'pi' do not match after gradient (byte = %d)", i_not_ok);
+  }
+  if (j_not_ok) {
+    printParticle_single(&pj, &xpj);
+    printParticle_single(&pj2, &xpj);
+    print_bytes(&pj, sizeof(struct part));
+    print_bytes(&pj2, sizeof(struct part));
+    error("Particles 'pj' do not match after gradient (byte = %d)", j_not_ok);
+  }
+
+#endif /* ! ANARCHY_PU_SPH */
+#endif /* ! EXTRA_HYDRO LOOP */
+
   /* --- Test the force loop --- */
 
   /* Call the symmetric version */
