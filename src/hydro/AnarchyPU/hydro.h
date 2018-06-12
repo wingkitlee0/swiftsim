@@ -492,10 +492,10 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
       const float l = 0.05; /* This should be moved to being a config option. */
       const float inverse_tau = 2.0 * l * p->gradient.v_sig / (p->h * kernel_gamma);
 
-      const float alpha_dt = inverse_tau * (alpha_loc - p->alpha);
+      const float alpha_dt = (alpha_loc - p->alpha);
 
       /* Now we have to actually update the value of alpha */
-      const float new_alpha = p->alpha + alpha_dt * dt;
+      const float new_alpha = p->alpha - alpha_dt * dt * inverse_tau;
 
       /* Config option ideally. Also, we shouldn't need this. */
       const float alpha_min = 0.00f;
@@ -503,7 +503,7 @@ __attribute__((always_inline)) INLINE static void hydro_end_gradient(
       if (new_alpha < alpha_min) {
         p->alpha = alpha_min;
       } else {
-        p-> alpha = new_alpha;
+        p->alpha = new_alpha;
       }
     }
   }
