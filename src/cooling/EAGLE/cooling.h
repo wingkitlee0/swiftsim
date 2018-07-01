@@ -32,12 +32,83 @@
 #include <math.h>
 
 /* Local includes. */
+#include "cooling_tables.h"
 #include "error.h"
 #include "hydro.h"
 #include "parser.h"
 #include "part.h"
 #include "physical_constants.h"
 #include "units.h"
+
+/**
+ * @brief Computes the extra heat from Helium reionisation at a given redshift.
+ *
+ * We follow the implementation of Wiersma et al. 2009, MNRAS, 399, 574-600,
+ * section. 2. The calculation returns energy in CGS.
+ *
+ * Note that delta_z is negative.
+ *
+ * @param z The current redshift.
+ * @param delta_z The change in redhsift over the course of this time-step.
+ * @param cooling The #cooling_function_data used in the run.
+ */
+INLINE static float cooling_helium_reion_extra_heat(
+    const float z, const float delta_z,
+    const struct cooling_function_data* restrict cooling) {
+
+#ifdef SWIFT_DEBUG_CHECKS
+  if (delta_z > 0.f) error("Invalid value for delta_z. Should be negative.");
+#endif
+
+  /* Recover the values we need */
+  const float He_reion_z_centre = cooling->He_reion_z_centre;
+  const float He_reion_z_sigma = cooling->He_reion_z_sigma;
+  const float He_reion_heat_cgs = cooling->He_reion_heat_cgs;
+
+  // MATTHIEU: to do: Optimize this.
+
+  float extra_heat;
+
+  /* Integral of the Gaussian between z and z - delta_z */
+  extra_heat =
+      erff((z - delta_z - He_reion_z_centre) / (M_SQRT2 * He_reion_z_sigma));
+  extra_heat -= erff((z - He_reion_z_centre) / (M_SQRT2 * He_reion_z_sigma));
+
+  /* Multiply by the normalisation factor */
+  extra_heat *= He_reion_heat_cgs * 0.5;
+
+  return extra_heat;
+}
+
+/**
+ * @brief Common operations performed on the cooling function at a
+ * given time-step or redshift.
+ *
+ * Here we load the cooling tables corresponding to our redshift.
+ *
+ * @param phys_const The physical constants in internal units.
+ * @param us The internal system of units.
+ * @param cosmo The current cosmological model.
+ * @param cooling The #cooling_function_data used in the run.
+ */
+INLINE static void cooling_update(const struct phys_const* phys_const,
+                                  const struct unit_system* us,
+                                  const struct cosmology* cosmo,
+                                  struct cooling_function_data* cooling) {
+
+  /* Current redshift */
+  const float redshift = cosmo->z;
+
+  /* Get index along the redshift index of the table */
+  int index_z;
+  float delta_z_table;
+  get_redshift_table_index(redshift, cooling, &index_z, &delta_z_table);
+  cooling->index_z = index_z;
+  cooling->delta_z_table = delta_z_table;
+
+  /* Load the current table (if different from what we have) */
+  ealge_check_cooling_tables(cooling, index_z);
+}
 
 /**
  * @brief Apply the cooling function to a particle.
@@ -48,14 +119,64 @@
  * @param cooling The #cooling_function_data used in the run.
  * @param p Pointer to the particle data.
  * @param xp Pointer to the extended particle data.
- * @param dt The time-step of this particle.
+ * @param dt The time-step of this particle (in internal units).
  */
 __attribute__((always_inline)) INLINE static void cooling_cool_part(
     const struct phys_const* restrict phys_const,
     const struct unit_system* restrict us,
     const struct cosmology* restrict cosmo,
     const struct cooling_function_data* restrict cooling,
-    struct part* restrict p, struct xpart* restrict xp, float dt) {}
+    struct part* restrict p, struct xpart* restrict xp, float dt) {
+
+  /* Abort early if the time-step is 0 */
+  if (dt == 0.f) return;
+
+  /* Current redshift and change in redshift of this time-step */
+  const float redshift = cosmo->z;
+  const float delta_z = -dt / cosmo->a;  // MATTHIEU: Check this!
+
+  /* Recover some particle properties */
+  const float mass = hydro_get_mass(p);
+  const float mass_inv = 1.f / mass;
+  const float rho = hydro_get_physical_density(p, cosmo);
+  const float uold = hydro_get_physical_internal_energy(p, cosmo);
+
+  /* Conversion to CGS system */
+  const float dt_cgs = dt * units_cgs_conversion_factor(us, UNIT_CONV_TIME);
+  const float rho_cgs =
+      rho * units_cgs_conversion_factor(us, UNIT_CONV_DENSITY);
+  const float uold_cgs =
+      uold * units_cgs_conversion_factor(us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
+
+  // MATTHIEU: to do: Add check for min energy here
+
+  /* Compute metallicites as mass fractions of the smoothed metallicites */
+  float Z[chemistry_element_count];
+  for (int i = 0; i < chemistry_element_count; ++i)
+    Z[i] = p->chemistry_data.smoothed_metal_mass_fraction[chemistry_element_H] *
+           mass_inv;
+
+  /* Hydrogen fraction */
+  const float XH = Z[chemistry_element_H];
+
+  /* Compute Helium fraction */
+  const float He_frac =
+      Z[chemistry_element_He] / (XH + Z[chemistry_element_He]);
+
+  /* Hydrogen number density */
+  const float n_H_cgs = rho_cgs * XH / cooling->const_proton_mass_cgs;
+
+  /* Cooling rate factor n_H^2 / rho = n_H * XH / m_p */
+  const float rate_factor_cgs = n_H_cgs * XH / cooling->const_proton_mass_cgs;
+
+  /* Compute the extra heat injected by Helium re-ionization */
+  const float u_reion =
+      cooling_helium_reion_extra_heat(redshift, delta_z, cooling);
+  const float Lambda_reion = u_reion / (dt_cgs * rate_factor_cgs);
+
+  // float Lambda_net = Lambda_reion + cooling_rate(uold_cgs, n_H_cgs,
+  p->entropy = Lambda_reion + He_frac + uold_cgs;
+}
 
 /**
  * @brief Computes the cooling time-step.
@@ -116,6 +237,41 @@ static INLINE void cooling_init_backend(struct swift_params* parameter_file,
                                         const struct unit_system* us,
                                         const struct phys_const* phys_const,
                                         struct cooling_function_data* cooling) {
+
+  /* Get the proton mass in CGS */
+  cooling->const_proton_mass_cgs =
+      phys_const->const_proton_mass *
+      units_cgs_conversion_factor(us, UNIT_CONV_MASS);
+
+  /* Read parameters related to H reionisation */
+  cooling->H_reion_z =
+      parser_get_param_double(parameter_file, "EagleCooling:H_reion_z");
+
+  /* Read parameters related to He II reionisation */
+  cooling->He_reion_z_centre =
+      parser_get_param_double(parameter_file, "EagleCooling:He_reion_z_centre");
+  cooling->He_reion_z_sigma =
+      parser_get_param_double(parameter_file, "EagleCooling:He_reion_z_sigma");
+  cooling->He_reion_heat_cgs = parser_get_param_double(
+      parameter_file, "EagleCooling:He_reion_heat_eVpH");
+
+  /* Convert He II reionisation parameters to the units we use internally */
+  cooling->He_reion_heat_cgs *=
+      phys_const->const_electron_volt / phys_const->const_proton_mass;
+  cooling->He_reion_heat_cgs *=
+      units_cgs_conversion_factor(us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
+
+  /* Read the cooling tables */
+  eagle_cooling_init_redshift_tables(cooling);
+  eagle_read_cooling_table_header(cooling);
+  eagle_set_solar_metallicity(cooling);
+  eagle_allocate_cooling_tables(cooling);
+
+  /* Set the table parameters to un-initialised values */
+  cooling->index_z = -1;
+  cooling->delta_z_table = 0.f;
+  cooling->low_z_index = -1;
+  cooling->high_z_index = -1;
 }
 
 /**
@@ -127,6 +283,11 @@ static INLINE void cooling_print_backend(
     const struct cooling_function_data* cooling) {
 
   message("Cooling function is 'EAGLE'.");
+
+  message("Helium reionisation centre: z=%.2f sigma=%.2f",
+          cooling->He_reion_z_centre, cooling->He_reion_z_sigma);
+  message("Helium reionisation heating: %e [erg/g]",
+          cooling->He_reion_heat_cgs);
 }
 
 #endif /* SWIFT_COOLING_EAGLE_H */

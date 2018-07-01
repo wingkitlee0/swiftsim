@@ -4318,6 +4318,11 @@ void engine_init_particles(struct engine *e, int flag_entropy_ICs,
   space_init_parts(s, e->verbose);
   space_init_gparts(s, e->verbose);
 
+  /* Update the cooling function */
+  if (e->policy & engine_policy_cooling)
+    cooling_update(e->physical_constants, e->internal_units, e->cosmology,
+                   e->cooling_func);
+
   /* Now, launch the calculation */
   TIMER_TIC;
   engine_launch(e);
@@ -4528,6 +4533,11 @@ void engine_step(struct engine *e) {
   /* Update the softening lengths */
   if (e->policy & engine_policy_self_gravity)
     gravity_update(e->gravity_properties, e->cosmology);
+
+  /* Update the cooling function */
+  if (e->policy & engine_policy_cooling)
+    cooling_update(e->physical_constants, e->internal_units, e->cosmology,
+                   e->cooling_func);
 
   /* Prepare the tasks to be launched, rebuild or repartition if needed. */
   engine_prepare(e);
@@ -5381,7 +5391,7 @@ void engine_init(struct engine *e, struct space *s, struct swift_params *params,
                  struct cosmology *cosmo, const struct hydro_props *hydro,
                  struct gravity_props *gravity, struct pm_mesh *mesh,
                  const struct external_potential *potential,
-                 const struct cooling_function_data *cooling_func,
+                 struct cooling_function_data *cooling_func,
                  const struct chemistry_global_data *chemistry,
                  struct sourceterms *sourceterms) {
 

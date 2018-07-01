@@ -52,6 +52,13 @@ GrackleCooling:
   OutputMode: 1 # Write in output corresponding primordial chemistry mode
   MaxSteps: 1000
   ConvergenceLimit: 1e-2
+
+EagleCooling:
+  H_reion_z:              11.0
+  H_reion_heat_eVpH:       2.0
+  He_reion_z_centre:       3.5
+  He_reion_z_sigma:        0.5
+  He_reion_heat_eVpH:      2.0
   
 EAGLEChemistry:
   InitMetallicity:         0.
