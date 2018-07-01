@@ -1,6 +1,6 @@
 /*******************************************************************************
  * This file is part of SWIFT.
- * Copyright (c) 2017 Matthieu Schaller (matthieu.schaller@durham.ac.uk)
+ * Copyright (c) 2018 Matthieu Schaller (matthieu.schaller@durham.ac.uk)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -16,24 +16,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
-#ifndef SWIFT_COOLING_TABLES_EAGLE_H
-#define SWIFT_COOLING_TABLES_EAGLE_H
+#ifndef SWIFT_COOLING_RATES_EAGLE_H
+#define SWIFT_COOLING_RATES_EAGLE_H
 
+/* Config parameters. */
+#include "../config.h"
+
+/* Local includes. */
+#include "chemistry_struct.h"
 #include "cooling_struct.h"
 
-void eagle_get_redshift_table_index(const float z,
-                                    const struct cooling_function_data *cooling,
-                                    int *z_index, float *delta_z);
+float eagle_do_cooling(const struct cooling_function_data* cooling,
+                       const float uold_cgs, const float rho_cgs,
+                       const float dt_cgs, const float delta_z,
+                       const float redshift,
+                       const float Z[chemistry_element_count]);
 
-void eagle_cooling_init_redshift_tables(struct cooling_function_data *cooling);
-
-void eagle_read_cooling_table_header(struct cooling_function_data *cooling);
-
-void eagle_set_solar_metallicity(struct cooling_function_data *cooling);
-
-void eagle_allocate_cooling_tables(struct cooling_function_data *cooling);
-
-void ealge_check_cooling_tables(struct cooling_function_data *cooling,
-                                int index_z);
-
-#endif /* SWIFT_COOLING_TABLES_EAGLE_H */
+#endif /*SWIFT_COOLING_RATES_EAGLE_H */

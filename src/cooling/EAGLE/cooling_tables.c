@@ -20,90 +20,16 @@
 
 /* Local headers */
 #include "cooling.h"
+#include "cooling_interpolation.h"
 #include "cooling_tables.h"
 
 /* Library headers */
 #include <hdf5.h>
 
-/*! Number of different bins along the redhsift axis of the tables */
-#define eagle_cooling_N_redshifts 49
-
-/*! Number of different bins along the temperature axis of the tables */
-#define eagle_cooling_N_temperature 176
-
-/*! Number of different bins along the density axis of the tables */
-#define eagle_cooling_N_density 41
-
-/*! Number of different bins along the metal axis of the tables */
-#define eagle_cooling_N_metal 9
-
-/*! Number of different bins along the metal axis of the tables */
-#define eagle_cooling_N_He_frac 7
-
-/*! Number of different bins along the abundances axis of the tables */
-#define eagle_cooling_N_abundances 11
-
-/*! Name of the elements in the order they are storeed in the file */
+/*! Name of the elements in the order they are storeed in the files */
 static const char* eagle_tables_element_name[eagle_cooling_N_metal] = {
     "Carbon",  "Nitrogen", "Oxygen",  "Neon", "Magnesium",
     "Silicon", "Sulphur",  "Calcium", "Iron"};
-
-/**
- * @brief Returns the 1d index of element with 2d indices x,y
- * from a flattened 2d array in row major order
- *
- * @param x, y Indices of element of interest
- * @param Nx, Ny Sizes of array dimensions
- */
-__attribute__((always_inline)) INLINE int row_major_index_2d(int x, int y,
-                                                             int Nx, int Ny) {
-  int index = x * Ny + y;
-#ifdef SWIFT_DEBUG_CHECKS
-  assert(x < Nx);
-  assert(y < Ny);
-#endif
-  return index;
-}
-
-/**
- * @brief Returns the 1d index of element with 3d indices x,y,z
- * from a flattened 3d array in row major order
- *
- * @param z, y, y Indices of element of interest
- * @param Nx, Ny, Nz Sizes of array dimensions
- */
-__attribute__((always_inline)) INLINE int row_major_index_3d(int x, int y,
-                                                             int z, int Nx,
-                                                             int Ny, int Nz) {
-  int index = x * Ny * Nz + y * Nz + z;
-#ifdef SWIFT_DEBUG_CHECKS
-  assert(x < Nx);
-  assert(y < Ny);
-  assert(z < Nz);
-#endif
-  return index;
-}
-
-/**
- * @brief Returns the 1d index of element with 4d indices x,y,z,w
- * from a flattened 4d array in row major order
- *
- * @param x, y, z, w Indices of element of interest
- * @param Nx, Ny, Nz, Nw Sizes of array dimensions
- */
-__attribute__((always_inline)) INLINE int row_major_index_4d(int x, int y,
-                                                             int z, int w,
-                                                             int Nx, int Ny,
-                                                             int Nz, int Nw) {
-  int index = x * Ny * Nz * Nw + y * Nz * Nw + z * Nw + w;
-#ifdef SWIFT_DEBUG_CHECKS
-  assert(x < Nx);
-  assert(y < Ny);
-  assert(z < Nz);
-  assert(w < Nw);
-#endif
-  return index;
-}
 
 /**
  * @brief Returns the index of the current redshift in the cooling table.
@@ -115,9 +41,9 @@ __attribute__((always_inline)) INLINE int row_major_index_4d(int x, int y,
  * table.
  * @param delta_z (return) The difference in redshift to the table z_index.
  */
-void get_redshift_table_index(
-    const float z, const struct cooling_function_data* restrict cooling,
-    int* z_index, float* delta_z) {
+void eagle_get_redshift_table_index(const float z,
+                                    const struct cooling_function_data* cooling,
+                                    int* z_index, float* delta_z) {
 
   const float H_reion_z = cooling->H_reion_z;
   const float* table_redshifts = cooling->table_redshifts;
@@ -348,6 +274,8 @@ void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
   /* Solar abundances bins */
   read_hdf5_array(h_file, "/Header/Abundances/Solar_mass_fractions",
                   cooling->table_solar_abundances);
+
+  // MATTHIEU: Check that the metals are in the same order
 
   H5Fclose(h_file);
 
