@@ -236,6 +236,10 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
       eagle_cooling_N_temperature, delta_z_table, delta_He_table,
       delta_nH_table, delta_T_table);
 
+#ifdef SWIFT_DEBUG_CHECKS
+  if (Lambda_net == 0.) error("Cooling is 0");
+#endif
+
   /**********************/
   /* Compton cooling    */
   /**********************/
@@ -324,6 +328,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
 #ifdef SWIFT_DEBUG_CHECKS
   if (XH == 0.f) error("Hydrogen fraction is 0. Something is really odd...");
+  if (XH > 1.f) error("Hydrogen fraction is >1. Something is really odd...");
 #endif
 
   /* Helium fraction */
@@ -360,6 +365,9 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
     /* Explicit solution */
     return uold_cgs + delta_u_cgs;
   }
+
+  // MATTHIEU: to do: Bring forward the common calculation of indices and metal
+  // arrays.
 
   /*************************************/
   /* Let's try to bracket the solution */

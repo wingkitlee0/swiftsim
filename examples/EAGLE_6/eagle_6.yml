@@ -67,17 +67,18 @@ EagleCooling:
   He_reion_z_centre:       3.5
   He_reion_z_sigma:        0.5
   He_reion_heat_eVpH:      2.0
-  
+
+# We impose solar metallicity
 EAGLEChemistry:
   InitMetallicity:         0.
-  InitAbundance_Hydrogen:  0.752
-  InitAbundance_Helium:    0.248
-  InitAbundance_Carbon:    0.000
-  InitAbundance_Nitrogen:  0.000
-  InitAbundance_Oxygen:    0.000
-  InitAbundance_Neon:      0.000
-  InitAbundance_Magnesium: 0.000
-  InitAbundance_Silicon:   0.000
-  InitAbundance_Iron:      0.000
+  InitAbundance_Hydrogen:  0.7064978
+  InitAbundance_Helium:    0.28055534
+  InitAbundance_Carbon:    0.0020665436
+  InitAbundance_Nitrogen:  8.3562563E-4
+  InitAbundance_Oxygen:    0.0054926244
+  InitAbundance_Neon:      0.0014144605
+  InitAbundance_Magnesium: 5.907064E-4
+  InitAbundance_Silicon:   6.825874E-4
+  InitAbundance_Iron:      0.0011032152
   CalciumOverSilicon:      0.0941736
   SulphurOverSilicon:      0.6054160
