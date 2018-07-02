@@ -55,6 +55,17 @@ double eagle_cooling_helium_reion_extra_heat(
   return extra_heat;
 }
 
+/**
+ * @brief Sets the element abundances in units of the solar abundances
+ * assumed by the cooling tables.
+ *
+ * Calcium and Sulphur are not tracked by the hydro scheme. We use
+ * the Silicon abundance for them.
+ *
+ * @param cooling The #cooling_function_data used in the run.
+ * @param Z The particle metal content expressed as metal mass fractions.
+ * @param element_abundance_solar The abundances in units of solar abundances.
+ */
 void eagle_set_cooling_abundances(
     const struct cooling_function_data* cooling,
     const float Z[chemistry_element_count],
@@ -62,8 +73,7 @@ void eagle_set_cooling_abundances(
 
   /* We copy over the Metals (i.e. ignoring H and He in the first 2 array
    * elements). For S and Ca we use the Si abundance as we don't track
-   * them individually.
-   */
+   * them individually. */
 
   element_abundance_solar[0] =
       Z[2] / cooling->table_solar_abundances[2]; /* C  */
@@ -166,15 +176,34 @@ float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
  * - 3rd dim: Hydrogen density, length = eagle_cooling_N_density
  * - 4th dim: Internal energy, length = eagle_cooling_N_temperature
  *
- * 2) Compton cooling:
- * We compute the electron abundnace by interpolating the flattened 4d table
+ * 2) Electron abundance
+ * We compute the electron abundance by interpolating the flattened 4d table
  * 'H_and_He_electron_abundance' that is arranged in the following way:
  * - 1st dim: redshift, length = 2
  * - 2nd dim: Helium fraction, length = eagle_cooling_N_He_frac
  * - 3rd dim: Hydrogen density, length = eagle_cooling_N_density
  * - 4th dim: Internal energy, length = eagle_cooling_N_temperature
  *
- * 3) Metal line cooling:
+ * 3) Compton cooling is applied via the analytic formula.
+ *
+ * 4) Solar electron abudance
+ * We compute the solar electron abundance by interpolating the flattened 3d
+ * table
+ * 'solar_electron_abundance' that is arranged in the following way:
+ * - 1st dim: redshift, length = 2
+ * - 2nd dim: Hydrogen density, length = eagle_cooling_N_density
+ * - 3rd dim: Internal energy, length = eagle_cooling_N_temperature
+ *
+ * 5) Metal-line cooling
+ * For each tracked element we interpolate the flattened 4D table
+ * 'table_metals_net_heating' that is arrange in the following way:
+ * - 1st dim: redshift, length = 2
+ * - 2nd dim: element, length = eagle_cooling_N_metal
+ * - 3rd dim: Hydrogen density, length = eagle_cooling_N_density
+ * - 4th dim: Internal energy, length = eagle_cooling_N_temperature
+ *
+ * Note that this is a fake 4D interpolation as we do not interpolate
+ * along the 2nd dimension. We just do this once per element.
  *
  * @param cooling The #cooling_function_data used in the run.
  * @param u_cgs The internal energy in CGS units.
@@ -213,7 +242,7 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
                 (float)log10(n_H_cgs), &index_nH, &delta_nH_table);
 
   /* For the redshift, we can use the pre-computed delta stored in the cooling
-   * function */
+   * function structure */
   float delta_z_table = cooling->delta_z_table;
 
   /**********************/
@@ -260,14 +289,9 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
                   electron_abundance / n_H_cgs;
   }
 
-  /**********************/
-  /* Metal-line cooling */
-  /**********************/
-
-  /* We start by setting the solar abundances */
-  float element_abundance_solar[eagle_cooling_N_metal];
-  eagle_set_cooling_abundances(cooling, Z, element_abundance_solar);
-
+  /*******************************/
+  /* Solar electron abundance    */
+  /*******************************/
   /* Compute the electron abundances for the Solar values */
   const double solar_electron_abundance = interpolation_3d(
       cooling->table_solar_electron_abundance, 0, index_nH, index_T, 2,
@@ -275,6 +299,14 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
       delta_nH_table, delta_T_table);
 
   const double abundance_ratio = electron_abundance / solar_electron_abundance;
+
+  /**********************/
+  /* Metal-line cooling */
+  /**********************/
+
+  /* We start by setting the solar abundances */
+  float element_abundance_solar[eagle_cooling_N_metal];
+  eagle_set_cooling_abundances(cooling, Z, element_abundance_solar);
 
   /* Loop over the metals */
   for (int i = 0; i < eagle_cooling_N_metal; ++i) {
