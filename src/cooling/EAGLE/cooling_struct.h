@@ -29,6 +29,12 @@ struct cooling_function_data {
   /*! Proton mass in cgs */
   double const_proton_mass_cgs;
 
+  /*! Temperature of the CMB at redshift 0 */
+  double T_CMB_0;
+
+  /*! Compton rate in cgs [g cm^2 s^-3 K^-1] */
+  double compton_rate_cgs;
+
   /*! Redshift of H reionization */
   double H_reion_z;
 

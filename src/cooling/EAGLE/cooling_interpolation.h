@@ -131,7 +131,6 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
 #endif
 }
 
-
 /**
  * @brief Interpolate a flattened 4D table at a given position.
  *
@@ -139,7 +138,8 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
  *
  * @param x, y, z, w Indices of element of interest
  * @param Nx, Ny, Nz, Nw Sizes of array dimensions
- * @param dx, dy, dz, dw Distance between the point and the index in units of the grid spacing.
+ * @param dx, dy, dz, dw Distance between the point and the index in units of
+ * the grid spacing.
  */
 __attribute__((always_inline)) INLINE float interpolation_4d(
     const float *table, const int xi, const int yi, const int zi, const int wi,

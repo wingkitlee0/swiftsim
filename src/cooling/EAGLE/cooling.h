@@ -194,6 +194,28 @@ static INLINE void cooling_init_backend(struct swift_params* parameter_file,
       phys_const->const_proton_mass *
       units_cgs_conversion_factor(us, UNIT_CONV_MASS);
 
+  /* Temperature of the CMB in CGS */
+  const double T_CMB_0 = phys_const->const_T_CMB_0 *
+                         units_cgs_conversion_factor(us, UNIT_CONV_TEMPERATURE);
+  cooling->T_CMB_0 = T_CMB_0; /* K */
+
+  /* Compute the coefficient at the front of the Compton cooling expression */
+  /* This should be ~1.0178085e-37 g cm^2 s^-3 K^-5 */
+  const double radiation_constant =
+      4. * phys_const->const_stefan_boltzmann / phys_const->const_speed_light_c;
+  const double compton_coefficient =
+      4. * radiation_constant * phys_const->const_thomson_cross_section *
+      phys_const->const_boltzmann_k /
+      (phys_const->const_electron_mass * phys_const->const_speed_light_c);
+  const float dimension_coefficient[5] = {1, 2, -3, 0, -5};
+  const double compton_coefficient_cgs =
+      compton_coefficient *
+      units_general_cgs_conversion_factor(us, dimension_coefficient);
+
+  /* And now the Compton rate */
+  cooling->compton_rate_cgs =
+      compton_coefficient_cgs * T_CMB_0 * T_CMB_0 * T_CMB_0 * T_CMB_0;
+
   /* Read parameters related to H reionisation */
   cooling->H_reion_z =
       parser_get_param_double(parameter_file, "EagleCooling:H_reion_z");
@@ -234,6 +256,11 @@ static INLINE void cooling_print_backend(
     const struct cooling_function_data* cooling) {
 
   message("Cooling function is 'EAGLE'.");
+
+  message("CMB temperature at z=0: %e K", cooling->T_CMB_0);
+  message("Compton rate: %e [g cm^2 s^-3 K^-1]", cooling->compton_rate_cgs);
+
+  message("Hydrogen reionisation: z=%.2f", cooling->H_reion_z);
 
   message("Helium reionisation centre: z=%.2f sigma=%.2f",
           cooling->He_reion_z_centre, cooling->He_reion_z_sigma);

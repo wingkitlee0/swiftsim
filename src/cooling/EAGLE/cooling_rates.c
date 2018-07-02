@@ -78,13 +78,19 @@ float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
                            const float u_cgs, const float n_H_cgs,
                            const float He_frac) {
 
-  /* Start by recovering indices along the axis of the tables */
+  /* Start by recovering indices along the axis of the table */
   int index_He, index_nH, index_u;
   float delta_He_table, delta_nH_table, delta_u_table;
+
+  /* Helium fraction axis */
   find_1d_index(cooling->table_He_frac, eagle_cooling_N_He_frac, He_frac,
                 &index_He, &delta_He_table);
+
+  /* Hydrogen number density axis */
   find_1d_index(cooling->table_nH, eagle_cooling_N_density, log10f(n_H_cgs),
                 &index_nH, &delta_nH_table);
+
+  /* Internal energy axis */
   find_1d_index(cooling->table_u, eagle_cooling_N_temperature, log10f(u_cgs),
                 &index_u, &delta_u_table);
 
@@ -93,6 +99,9 @@ float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
   float delta_z_table = cooling->delta_z_table;
 
   /* Now, interpolate ! */
+
+  /* Note: The 2 for redshifts is because we only have 2 tables in memory at a
+   * given point in time */
   const float logT =
       interpolation_4d(cooling->table_u_to_temp, 0, index_He, index_nH, index_u,
                        2, eagle_cooling_N_He_frac, eagle_cooling_N_density,
@@ -108,6 +117,26 @@ float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
     return T;
 }
 
+/**
+ * @brief Computes the cooling corresponding to a given internal energy,
+ * hydrogen number density, Helium fraction, redshift and metallicity.
+ *
+ * We interpolate the flattened 4D table 'u_to_temp' that is arranged in the
+ * following way:
+ * - 1st dim: redshift, length = 2
+ * - 2nd dim: Helium fraction, length = eagle_cooling_N_He_frac
+ * - 3rd dim: Hydrogen density, length = eagle_cooling_N_density
+ * - 4th dim: Internal energy, length = eagle_cooling_N_temperature
+ *
+ * @param cooling The #cooling_function_data used in the run.
+ * @param u_cgs The internal energy in CGS units.
+ * @param n_H_cgs The Hydrogen number density in CGS units.
+ * @param He_frac The Helium fraction.
+ * @param redshift The current redshift.
+ * @param delta_z The time-step expressed as a change in redshift. This is
+ * negative.
+ * @param Z The element metallicity expressed as element mass fractions.
+ */
 float eagle_cooling_rate(const struct cooling_function_data* cooling,
                          const float u_cgs, const float n_H_cgs,
                          const float He_frac, const float redshift,
@@ -120,15 +149,64 @@ float eagle_cooling_rate(const struct cooling_function_data* cooling,
   /* Start by recovering indices along the axis of the tables */
   int index_T, index_He, index_nH;
   float delta_T_table, delta_He_table, delta_nH_table;
+
+  /* Temperature axis */
   find_1d_index(cooling->table_temperatures, eagle_cooling_N_temperature,
                 log10f(temp), &index_T, &delta_T_table);
+
+  /* Helium fraction axis */
   find_1d_index(cooling->table_He_frac, eagle_cooling_N_He_frac, He_frac,
                 &index_He, &delta_He_table);
+
+  /* Hydrogen number density axis */
   find_1d_index(cooling->table_nH, eagle_cooling_N_density, log10f(n_H_cgs),
                 &index_nH, &delta_nH_table);
 
-  error("Implement!");
-  return 1.f;
+  /* For the redshift, we can use the pre-computed delta stored in the cooling
+   * function */
+  float delta_z_table = cooling->delta_z_table;
+
+  /**********************/
+  /* Metal-free cooling */
+  /**********************/
+
+  float Lambda_net = interpolation_4d(
+      cooling->table_H_and_He_net_heating, 0, index_He, index_nH, index_T, 2,
+      eagle_cooling_N_He_frac, eagle_cooling_N_density,
+      eagle_cooling_N_temperature, delta_z_table, delta_He_table,
+      delta_nH_table, delta_T_table);
+
+  /**********************/
+  /* Compton cooling    */
+  /**********************/
+
+  /* Do we need to add the inverse Compton cooling? */
+  /* It is *not* stored in the tables before re-ionisation */
+  if ((redshift > cooling->table_redshifts[eagle_cooling_N_redshifts - 1]) ||
+      (redshift > cooling->H_reion_z)) {
+
+    const float electron_abundance = interpolation_4d(
+        cooling->table_H_and_He_electron_abundance, 0, index_He, index_nH,
+        index_T, 2, eagle_cooling_N_He_frac, eagle_cooling_N_density,
+        eagle_cooling_N_temperature, delta_z_table, delta_He_table,
+        delta_nH_table, delta_T_table);
+
+    const float zp1 = 1.f + redshift;
+    const float zp1p4 = zp1 * zp1 * zp1 * zp1;
+
+    /* CMB temperature at this redshift */
+    const float T_CMB = cooling->T_CMB_0 * zp1;
+
+    /* Compton cooling rate */
+    Lambda_net -= cooling->compton_rate_cgs * (temp - T_CMB) * zp1p4 *
+                  electron_abundance / n_H_cgs;
+  }
+
+  /**********************/
+  /* Metal-line cooling */
+  /**********************/
+
+  return Lambda_net;
 }
 
 /**
