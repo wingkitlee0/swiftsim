@@ -277,18 +277,18 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
   const double abundance_ratio = electron_abundance / solar_electron_abundance;
 
   /* Loop over the metals */
-  for (int i = 0; i < eagle_cooling_N_metal - 1 /* MATTHIEU */; ++i) {
+  for (int i = 0; i < eagle_cooling_N_metal; ++i) {
     if (element_abundance_solar[i] > 0.) {
 
-      const double Lambda_elem =
-          interpolation_4d(cooling->table_metals_net_heating, 0, i, index_nH,
-                           index_T, 2, eagle_cooling_N_metal /* MATTHIEU */,
-                           eagle_cooling_N_density, eagle_cooling_N_temperature,
-                           delta_z_table, 0.f, delta_nH_table, delta_T_table);
+      // MATTHIEU: to do: Transpose array to have Z as 1st dimension
 
-      /* MATTHIEU */
-      Lambda_net +=
-          0. * Lambda_elem * abundance_ratio * element_abundance_solar[i];
+      const double Lambda_elem = interpolation_4d_no_y(
+          cooling->table_metals_net_heating, 0, i, index_nH, index_T, 2,
+          eagle_cooling_N_metal, eagle_cooling_N_density,
+          eagle_cooling_N_temperature, delta_z_table, 0.f, delta_nH_table,
+          delta_T_table);
+
+      Lambda_net += Lambda_elem * abundance_ratio * element_abundance_solar[i];
     }
   }
 

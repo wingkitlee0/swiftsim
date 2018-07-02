@@ -274,4 +274,102 @@ __attribute__((always_inline)) INLINE float interpolation_4d(
   return result;
 }
 
+/**
+ * @brief Interpolate a flattened 4D table at a given position but avoid the
+ * y-dimension.
+ *
+ * This function uses linear interpolation along each axis.
+ * We look at the yi coordoniate but do not interpolate around it. We just
+ * interpolate the remaining 3 dimensions.
+ *
+ * @param table The 4D table to interpolate.
+ * @param xi, yi, zi, wi Indices of element of interest.
+ * @param Nx, Ny, Nz, Nw Sizes of array dimensions.
+ * @param dx, dy, dz, dw Distance between the point and the index in units of
+ * the grid spacing.
+ */
+__attribute__((always_inline)) INLINE float interpolation_4d_no_y(
+    const float *table, const int xi, const int yi, const int zi, const int wi,
+    const int Nx, const int Ny, const int Nz, const int Nw, const float dx,
+    const float dy, const float dz, const float dw) {
+
+#ifdef SWIFT_DEBUG_CHECKS
+  if (dx < -0.001f || dx > 1.001f) error("Invalid dx=%e", dx);
+  if (dz < -0.001f || dz > 1.001f) error("Invalid dx=%e", dz);
+  if (dw < -0.001f || dw > 1.001f) error("Invalid dx=%e", dw);
+#endif
+
+  const float tx = 1.f - dx;
+  const float ty = 1.f;
+  const float tz = 1.f - dz;
+  const float tw = 1.f - dw;
+
+  // MATTHIEU: to do: re-arrange to exploit faster access on the last entries
+  // MATTHIEU: to do: Exploit alignment of the arrays
+
+  /* Linear interpolation along each axis. We read the table 2^4=16 times */
+  float result =
+      tx * ty * tz * tw *
+      table[row_major_index_4d(xi + 0, yi + 0, zi + 0, wi + 0, Nx, Ny, Nz, Nw)];
+
+  result +=
+      tx * ty * tz * dw *
+      table[row_major_index_4d(xi + 0, yi + 0, zi + 0, wi + 1, Nx, Ny, Nz, Nw)];
+  result +=
+      tx * ty * dz * tw *
+      table[row_major_index_4d(xi + 0, yi + 0, zi + 1, wi + 0, Nx, Ny, Nz, Nw)];
+  /* result += */
+  /*     tx * dy * tz * tw * */
+  /*     table[row_major_index_4d(xi + 0, yi + 1, zi + 0, wi + 0, Nx, Ny, Nz,
+   * Nw)]; */
+  result +=
+      dx * ty * tz * tw *
+      table[row_major_index_4d(xi + 1, yi + 0, zi + 0, wi + 0, Nx, Ny, Nz, Nw)];
+
+  result +=
+      tx * ty * dz * dw *
+      table[row_major_index_4d(xi + 0, yi + 0, zi + 1, wi + 1, Nx, Ny, Nz, Nw)];
+  /* result += */
+  /*     tx * dy * tz * dw * */
+  /*     table[row_major_index_4d(xi + 0, yi + 1, zi + 0, wi + 1, Nx, Ny, Nz,
+   * Nw)]; */
+  result +=
+      dx * ty * tz * dw *
+      table[row_major_index_4d(xi + 1, yi + 0, zi + 0, wi + 1, Nx, Ny, Nz, Nw)];
+  /* result += */
+  /*     tx * dy * dz * tw * */
+  /*     table[row_major_index_4d(xi + 0, yi + 1, zi + 1, wi + 0, Nx, Ny, Nz,
+   * Nw)]; */
+  result +=
+      dx * ty * dz * tw *
+      table[row_major_index_4d(xi + 1, yi + 0, zi + 1, wi + 0, Nx, Ny, Nz, Nw)];
+  /* result += */
+  /*     dx * dy * tz * tw * */
+  /*     table[row_major_index_4d(xi + 1, yi + 1, zi + 0, wi + 0, Nx, Ny, Nz,
+   * Nw)]; */
+
+  /* result += */
+  /*     dx * dy * dz * tw * */
+  /*     table[row_major_index_4d(xi + 1, yi + 1, zi + 1, wi + 0, Nx, Ny, Nz,
+   * Nw)]; */
+  /* result += */
+  /*     dx * dy * tz * dw * */
+  /*     table[row_major_index_4d(xi + 1, yi + 1, zi + 0, wi + 1, Nx, Ny, Nz,
+   * Nw)]; */
+  result +=
+      dx * ty * dz * dw *
+      table[row_major_index_4d(xi + 1, yi + 0, zi + 1, wi + 1, Nx, Ny, Nz, Nw)];
+  /* result += */
+  /*     tx * dy * dz * dw * */
+  /*     table[row_major_index_4d(xi + 0, yi + 1, zi + 1, wi + 1, Nx, Ny, Nz,
+   * Nw)]; */
+
+  /* result += */
+  /*     dx * dy * dz * dw * */
+  /*     table[row_major_index_4d(xi + 1, yi + 1, zi + 1, wi + 1, Nx, Ny, Nz,
+   * Nw)]; */
+
+  return result;
+}
+
 #endif /* SWIFT_COOLING_INTERPOLATION_EAGLE_H */
