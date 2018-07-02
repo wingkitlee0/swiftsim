@@ -154,7 +154,7 @@ __attribute__((always_inline)) INLINE static float cooling_timestep(
  * @param phys_const The physical constants in internal units.
  * @param us The internal system of units.
  * @param cosmo The current cosmological model.
- * @param cooling The properties of the cooling function.
+ * @param cooling The #cooling_function_data used in the run.
  * @param p Pointer to the particle data.
  * @param xp Pointer to the extended particle data.
  */

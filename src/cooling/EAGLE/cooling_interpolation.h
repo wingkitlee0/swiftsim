@@ -57,7 +57,7 @@ __attribute__((always_inline)) INLINE int row_major_index_2d(int x, int y,
  * @brief Returns the 1d index of element with 3d indices x,y,z
  * from a flattened 3d array in row major order
  *
- * @param z, y, y Indices of element of interest
+ * @param x, y, z Indices of element of interest
  * @param Nx, Ny, Nz Sizes of array dimensions
  */
 __attribute__((always_inline)) INLINE int row_major_index_3d(int x, int y,
