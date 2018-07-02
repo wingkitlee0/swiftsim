@@ -100,7 +100,9 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   const float mass = hydro_get_mass(p);
   const float mass_inv = 1.f / mass;
   const float rho = hydro_get_physical_density(p, cosmo);
-  const float uold = hydro_get_physical_internal_energy(p, cosmo);
+  const float uold = hydro_get_physical_internal_energy(p, cosmo) +
+                     hydro_get_internal_energy_dt(p) * dt;
+  // MATTHIEU: Add cosmology here. We want the *physical* du/dt
 
   /* Conversion to CGS system */
   const double dt_cgs = dt * units_cgs_conversion_factor(us, UNIT_CONV_TIME);
@@ -112,7 +114,7 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   // MATTHIEU: to do: Add check for min energy here
 
   /* Compute metallicites as mass fractions of the smoothed metallicites */
-  double Z[chemistry_element_count];
+  float Z[chemistry_element_count];
   for (int i = 0; i < chemistry_element_count; ++i)
     Z[i] =
         p->chemistry_data.metal_mass_fraction[chemistry_element_H] * mass_inv;
@@ -127,7 +129,7 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   /* Write back to the particle */
   const double unew = unew_cgs / units_cgs_conversion_factor(
                                      us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
-  hydro_set_internal_energy_dt(p, (unew - uold) / dt);
+  hydro_set_internal_energy_dt(p, 0.1 * (unew - uold) / dt);
 }
 
 /**

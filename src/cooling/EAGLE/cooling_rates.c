@@ -55,6 +55,38 @@ double eagle_cooling_helium_reion_extra_heat(
   return extra_heat;
 }
 
+void eagle_set_cooling_abundances(
+    const struct cooling_function_data* cooling,
+    const float Z[chemistry_element_count],
+    float element_abundance_solar[eagle_cooling_N_metal]) {
+
+  /* We copy over the Metals (i.e. ignoring H and He in the first 2 array
+   * elements). For S and Ca we use the Si abundance as we don't track
+   * them individually.
+   */
+
+  element_abundance_solar[0] =
+      Z[2] / cooling->table_solar_abundances[2]; /* C  */
+  element_abundance_solar[1] =
+      Z[3] / cooling->table_solar_abundances[3]; /* N  */
+  element_abundance_solar[2] =
+      Z[4] / cooling->table_solar_abundances[4]; /* O  */
+  element_abundance_solar[3] =
+      Z[5] / cooling->table_solar_abundances[5]; /* Ne */
+  element_abundance_solar[4] =
+      Z[6] / cooling->table_solar_abundances[6]; /* Mg */
+  element_abundance_solar[5] =
+      Z[7] / cooling->table_solar_abundances[7]; /* Si */
+  element_abundance_solar[6] =
+      Z[7] / cooling->table_solar_abundances[8]; /* S  */
+  element_abundance_solar[7] =
+      Z[7] / cooling->table_solar_abundances[9]; /* Ca */
+  element_abundance_solar[8] =
+      Z[8] / cooling->table_solar_abundances[10]; /* Fe */
+
+  // MATTHIEU: to do: Create array with pre-computed inverse abundances
+}
+
 /**
  * @brief Computes the temperature corresponding to a given internal energy,
  * hydrogen number density, Helium fraction and redshift.
@@ -77,6 +109,11 @@ double eagle_cooling_helium_reion_extra_heat(
 float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
                            const double u_cgs, const double n_H_cgs,
                            const float He_frac) {
+
+#ifdef SWIFT_DEBUG_CHECKS
+  if (u_cgs == 0.) error("Internal energy is 0. Aborting");
+  if (n_H_cgs == 0.) error("Hydrogen number density is 0. Aborting");
+#endif
 
   /* Start by recovering indices along the axis of the table */
   int index_He, index_nH, index_u;
@@ -148,8 +185,13 @@ float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
  */
 double eagle_cooling_rate(const struct cooling_function_data* cooling,
                           const double u_cgs, const double n_H_cgs,
-                          const double He_frac, const double redshift,
-                          const double Z[chemistry_element_count]) {
+                          const float He_frac, const double redshift,
+                          const float Z[chemistry_element_count]) {
+
+#ifdef SWIFT_DEBUG_CHECKS
+  if (u_cgs == 0.) error("Internal energy is 0. Aborting");
+  if (n_H_cgs == 0.) error("Hydrogen number density is 0. Aborting");
+#endif
 
   /* Get the temperature corresponding to this energy */
   const float temp = eagle_convert_u_to_T(cooling, u_cgs, n_H_cgs, He_frac);
@@ -175,6 +217,16 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
   float delta_z_table = cooling->delta_z_table;
 
   /**********************/
+  /* Electron abundance */
+  /**********************/
+
+  const double electron_abundance = interpolation_4d(
+      cooling->table_H_and_He_electron_abundance, 0, index_He, index_nH,
+      index_T, 2, eagle_cooling_N_He_frac, eagle_cooling_N_density,
+      eagle_cooling_N_temperature, delta_z_table, delta_He_table,
+      delta_nH_table, delta_T_table);
+
+  /**********************/
   /* Metal-free cooling */
   /**********************/
 
@@ -193,12 +245,6 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
   if ((redshift > cooling->table_redshifts[eagle_cooling_N_redshifts - 1]) ||
       (redshift > cooling->H_reion_z)) {
 
-    const double electron_abundance = interpolation_4d(
-        cooling->table_H_and_He_electron_abundance, 0, index_He, index_nH,
-        index_T, 2, eagle_cooling_N_He_frac, eagle_cooling_N_density,
-        eagle_cooling_N_temperature, delta_z_table, delta_He_table,
-        delta_nH_table, delta_T_table);
-
     const double zp1 = 1.f + redshift;
     const double zp1p4 = zp1 * zp1 * zp1 * zp1;
 
@@ -214,6 +260,35 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
   /* Metal-line cooling */
   /**********************/
 
+  /* We start by setting the solar abundances */
+  float element_abundance_solar[eagle_cooling_N_metal];
+  eagle_set_cooling_abundances(cooling, Z, element_abundance_solar);
+
+  /* Compute the electron abundances for the Solar values */
+  const double solar_electron_abundance = interpolation_3d(
+      cooling->table_solar_electron_abundance, 0, index_nH, index_T, 2,
+      eagle_cooling_N_density, eagle_cooling_N_temperature, delta_z_table,
+      delta_nH_table, delta_T_table);
+
+  const double abundance_ratio = electron_abundance / solar_electron_abundance;
+
+  /* Loop over the metals */
+  for (int i = 0; i < eagle_cooling_N_metal - 1 /* MATTHIEU */; ++i) {
+    if (element_abundance_solar[i] > 0.) {
+
+      const double Lambda_elem =
+          interpolation_4d(cooling->table_metals_net_heating, 0, i, index_nH,
+                           index_T, 2, eagle_cooling_N_metal /* MATTHIEU */,
+                           eagle_cooling_N_density, eagle_cooling_N_temperature,
+                           delta_z_table, 0.f, delta_nH_table, delta_T_table);
+
+      /* MATTHIEU */
+      Lambda_net +=
+          0. * Lambda_elem * abundance_ratio * element_abundance_solar[i];
+    }
+  }
+
+  /* Ok, we are done ! */
   return Lambda_net;
 }
 
@@ -236,10 +311,12 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
                         const double uold_cgs, const double rho_cgs,
                         const double dt_cgs, const double delta_z,
                         const double redshift,
-                        const double Z[chemistry_element_count]) {
+                        const float Z[chemistry_element_count]) {
 
 #ifdef SWIFT_DEBUG_CHECKS
   if (delta_z > 0.f) error("Invalid value for delta_z. Should be negative.");
+  if (rho_cgs == 0.) error("Density is 0. Aborting.");
+  if (uold_cgs == 0.) error("Internal energy is 0. Aborting.");
 #endif
 
   /* Hydrogen fraction */

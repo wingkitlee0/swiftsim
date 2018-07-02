@@ -115,6 +115,8 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
 
   const float delta = (size - 1) / (table[size - 1] - table[0]);
 
+  // MATTHIEU: to do: Exploit alignment of the arrays
+
   if (x < table[0]) { /* We are below the first element */
     *i = 0;
     *dx = 0.f;
@@ -129,6 +131,59 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
 #ifdef SWIFT_DEBUG_CHECKS
   if (*dx < -0.001f || *dx > 1.001f) error("Invalid distance found dx=%e", *dx);
 #endif
+}
+
+/**
+ * @brief Interpolate a flattened 3D table at a given position.
+ *
+ * This function uses linear interpolation along each axis.
+ *
+ * @param table The 3D table to interpolate.
+ * @param xi, yi, zi Indices of element of interest.
+ * @param Nx, Ny, Nz Sizes of array dimensions.
+ * @param dx, dy, dz Distance between the point and the index in units of
+ * the grid spacing.
+ */
+__attribute__((always_inline)) INLINE float interpolation_3d(
+    const float *table, const int xi, const int yi, const int zi, const int Nx,
+    const int Ny, const int Nz, const float dx, const float dy,
+    const float dz) {
+
+#ifdef SWIFT_DEBUG_CHECKS
+  if (dx < -0.001f || dx > 1.001f) error("Invalid dx=%e", dx);
+  if (dy < -0.001f || dy > 1.001f) error("Invalid dx=%e", dy);
+  if (dz < -0.001f || dz > 1.001f) error("Invalid dx=%e", dz);
+#endif
+
+  const float tx = 1.f - dx;
+  const float ty = 1.f - dy;
+  const float tz = 1.f - dz;
+
+  // MATTHIEU: to do: re-arrange to exploit faster access on the last entries
+  // MATTHIEU: to do: Exploit alignment of the arrays
+
+  /* Linear interpolation along each axis. We read the table 2^3=8 times */
+  float result = tx * ty * tz *
+                 table[row_major_index_3d(xi + 0, yi + 0, zi + 0, Nx, Ny, Nz)];
+
+  result += tx * ty * dz *
+            table[row_major_index_3d(xi + 0, yi + 0, zi + 1, Nx, Ny, Nz)];
+  result += tx * dy * tz *
+            table[row_major_index_3d(xi + 0, yi + 1, zi + 0, Nx, Ny, Nz)];
+  result += dx * ty * tz *
+            table[row_major_index_3d(xi + 1, yi + 0, zi + 0, Nx, Ny, Nz)];
+
+  result += tx * dy * dz *
+            table[row_major_index_3d(xi + 0, yi + 1, zi + 1, Nx, Ny, Nz)];
+  result += dx * ty * dz *
+            table[row_major_index_3d(xi + 1, yi + 0, zi + 1, Nx, Ny, Nz)];
+  result += dx * dy * tz *
+            table[row_major_index_3d(xi + 1, yi + 1, zi + 0, Nx, Ny, Nz)];
+
+  result += dx * dy * dz *
+            table[row_major_index_3d(xi + 1, yi + 1, zi + 1, Nx, Ny, Nz)];
+
+  return result;
 }
 
 /**
@@ -160,6 +215,7 @@ __attribute__((always_inline)) INLINE float interpolation_4d(
   const float tw = 1.f - dw;
 
   // MATTHIEU: to do: re-arrange to exploit faster access on the last entries
+  // MATTHIEU: to do: Exploit alignment of the arrays
 
   /* Linear interpolation along each axis. We read the table 2^4=16 times */
   float result =

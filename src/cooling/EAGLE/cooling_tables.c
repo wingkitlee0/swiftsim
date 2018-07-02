@@ -227,6 +227,8 @@ void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
 
   /* Now allocate all the header arrays */
 
+  // MATTHIEU: to do: Use aligned allocation.
+
   /* Table for log_10(T) */
   cooling->table_temperatures =
       malloc(eagle_cooling_N_temperature * sizeof(float));
@@ -275,7 +277,7 @@ void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
   read_hdf5_array(h_file, "/Header/Abundances/Solar_mass_fractions",
                   cooling->table_solar_abundances);
 
-  // MATTHIEU: Check that the metals are in the same order
+  // MATTHIEU: to do: Check that the metals are in the same order
 
   H5Fclose(h_file);
 
@@ -306,10 +308,10 @@ void eagle_set_solar_metallicity(struct cooling_function_data* cooling) {
 
   cooling->solar_metallicity = 1.f;
 
-  /* Remove Hydrogen abundance */
+  /* Deduct Hydrogen abundance */
   cooling->solar_metallicity -= cooling->table_solar_abundances[0];
 
-  /* Remove Helium abundance */
+  /* Deduct Helium abundance */
   cooling->solar_metallicity -= cooling->table_solar_abundances[1];
 
   message("Solar metallicity of the tables: Z=%f", cooling->solar_metallicity);

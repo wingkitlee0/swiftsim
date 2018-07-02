@@ -30,6 +30,6 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
                         const double uold_cgs, const double rho_cgs,
                         const double dt_cgs, const double delta_z,
                         const double redshift,
-                        const double Z[chemistry_element_count]);
+                        const float Z[chemistry_element_count]);
 
 #endif /*SWIFT_COOLING_RATES_EAGLE_H */
