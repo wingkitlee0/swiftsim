@@ -129,9 +129,7 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   const double unew = unew_cgs / units_cgs_conversion_factor(
                                      us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
 
-  if (p->id == 2926578061LL)
-    message("id=%lld uold= %e unew= %e", p->id, uold, unew);
-  hydro_set_internal_energy_dt(p, 0.1 * (unew - uold) / dt);
+  hydro_set_internal_energy_dt(p, (unew - uold) / dt);
 }
 
 /**
