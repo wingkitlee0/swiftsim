@@ -226,6 +226,7 @@ void runner_do_cooling(struct runner *r, struct cell *c, int timer) {
   const struct cooling_function_data *cooling_func = e->cooling_func;
   const struct phys_const *constants = e->physical_constants;
   const struct unit_system *us = e->internal_units;
+  const struct hydro_props *hp = e->hydro_properties;
   const double time_base = e->time_base;
   const integertime_t ti_current = e->ti_current;
   struct part *restrict parts = c->parts;
@@ -264,7 +265,8 @@ void runner_do_cooling(struct runner *r, struct cell *c, int timer) {
         }
 
         /* Let's cool ! */
-        cooling_cool_part(constants, us, cosmo, cooling_func, p, xp, dt_cool);
+        cooling_cool_part(constants, us, hp, cosmo, cooling_func, p, xp,
+                          dt_cool);
       }
     }
   }

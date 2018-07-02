@@ -85,6 +85,7 @@ INLINE static void cooling_update(const struct phys_const* phys_const,
 __attribute__((always_inline)) INLINE static void cooling_cool_part(
     const struct phys_const* restrict phys_const,
     const struct unit_system* restrict us,
+    const struct hydro_props* restrict hp,
     const struct cosmology* restrict cosmo,
     const struct cooling_function_data* restrict cooling,
     struct part* restrict p, struct xpart* restrict xp, float dt) {
@@ -98,11 +99,14 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
 
   /* Recover some particle properties */
   const float rho = hydro_get_physical_density(p, cosmo);
-  const float uold = hydro_get_physical_internal_energy(p, cosmo) +
-                     hydro_get_internal_energy_dt(p) * dt;
+  float uold = hydro_get_physical_internal_energy(p, cosmo) +
+               hydro_get_internal_energy_dt(p) * dt;
   // MATTHIEU: Add cosmology here. We want the *physical* du/dt
 
   /* Note that uold contains the du/dt term coming from the hydro solver */
+
+  /* Check for minimal energy */
+  uold = max(uold, hp->minimal_internal_energy);
 
   /* Conversion to CGS system */
   const double dt_cgs = dt * units_cgs_conversion_factor(us, UNIT_CONV_TIME);
@@ -110,8 +114,6 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
       rho * units_cgs_conversion_factor(us, UNIT_CONV_DENSITY);
   const double uold_cgs =
       uold * units_cgs_conversion_factor(us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
-
-  // MATTHIEU: to do: Add check for min energy here
 
   /* Compute metallicites as mass fractions of the smoothed metallicites */
   float Z[chemistry_element_count];
@@ -126,8 +128,11 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   // MATTHIEU: to do: Add check for min energy here
 
   /* Write back to the particle */
-  const double unew = unew_cgs / units_cgs_conversion_factor(
-                                     us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
+  double unew = unew_cgs /
+                units_cgs_conversion_factor(us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
+
+  /* Check for minimal energy */
+  unew = max(uold, hp->minimal_internal_energy);
 
   hydro_set_internal_energy_dt(p, (unew - uold) / dt);
 }
