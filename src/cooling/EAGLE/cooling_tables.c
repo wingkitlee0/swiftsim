@@ -505,65 +505,25 @@ void eagle_read_one_table(struct cooling_function_data* cooling,
   free(he_electron_abundance);
 }
 
+/**
+ * @brief Read the two cooling tables bracketing the current redshift.
+ *
+ * @param cooling The #cooling_function_data we play with.
+ */
 void eagle_load_cooling_tables(struct cooling_function_data* cooling) {
 
   const int low_z_index = cooling->low_z_index;
   const int high_z_index = cooling->high_z_index;
 
-// MATTHIEU: Optimize this. Can copy one table in the place of the other.
-#if 0
-  
-  /* u -> T conversion table */
-  const size_t num_u_to_temp = eagle_cooling_N_He_frac *
-                               eagle_cooling_N_density *
-                               eagle_cooling_N_temperature;
-
-  memcpy(cooling->table_u_to_temp, cooling->table_u_to_temp + num_u_to_temp,
-         num_u_to_temp * sizeof(float));
-
-  /* Metal cooling table */
-  const size_t num_metal_cool = eagle_cooling_N_metal *
-                                eagle_cooling_N_density *
-                                eagle_cooling_N_temperature;
-
-  memcpy(cooling->table_metals_net_heating,
-         cooling->table_metals_net_heating + num_metal_cool,
-         num_metal_cool * sizeof(float));
-
-  /* H and He cooling table */
-  const size_t num_H_and_He_cool = eagle_cooling_N_He_frac *
-                                   eagle_cooling_N_density *
-                                   eagle_cooling_N_temperature;
-
-  memcpy(cooling->table_H_and_He_net_heating,
-         cooling->table_H_and_Hes_net_heating + num_H_and_He_cool,
-         num_H_and_He_cool * sizeof(float));
-
-  /* H and He abundance table */
-  const size_t num_H_and_He_abundance = eagle_cooling_N_He_frac *
-                                        eagle_cooling_N_density *
-                                        eagle_cooling_N_temperature;
-
-  memcpy(cooling->table_H_and_He_electron_abundance,
-         cooling->table_H_and_He_electron_abundance + num_H_and_He_abundance,
-         num_H_and_He_abundance * sizeof(float));
-
-  /* Solar abundance table */
-  const size_t num_e_abundance =
-      eagle_cooling_N_density * eagle_cooling_N_temperature;
-
-  memcpy(cooling->table_solar_electron_abundance,
-         cooling->table_solar_electron_abundance + num_e_abundance,
-         num_e_abundance * sizeof(float));
-#endif
+  // MATTHIEU: Optimize this. Can copy one table in the place of the other.
 
   char filename[200];
 
-  /* Read the first table  ---------------------------- */
+  /* Read the first table */
   sprintf(filename, "z_%1.3f.hdf5", cooling->table_redshifts[low_z_index]);
   eagle_read_one_table(cooling, filename, 0);
 
-  /* Read the second table  --------------------------- */
+  /* Read the second table */
   sprintf(filename, "z_%1.3f.hdf5", cooling->table_redshifts[high_z_index]);
   eagle_read_one_table(cooling, filename, 1);
 }
@@ -576,7 +536,7 @@ void eagle_load_cooling_tables(struct cooling_function_data* cooling) {
  * @param index_z The index along the redshift axis of the tables of the current
  * z.
  */
-void ealge_check_cooling_tables(struct cooling_function_data* cooling,
+void eagle_check_cooling_tables(struct cooling_function_data* cooling,
                                 int index_z) {
 
   /* Do we already have the right table in memory? */

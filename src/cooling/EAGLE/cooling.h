@@ -60,7 +60,7 @@ INLINE static void cooling_update(const struct phys_const* phys_const,
   /* Current redshift */
   const float redshift = cosmo->z;
 
-  /* Get index along the redshift index of the table */
+  /* Get index along the redshift index of the tables */
   int index_z;
   float delta_z_table;
   eagle_get_redshift_table_index(redshift, cooling, &index_z, &delta_z_table);
@@ -68,7 +68,7 @@ INLINE static void cooling_update(const struct phys_const* phys_const,
   cooling->delta_z_table = delta_z_table;
 
   /* Load the current table (if different from what we have) */
-  ealge_check_cooling_tables(cooling, index_z);
+  eagle_check_cooling_tables(cooling, index_z);
 }
 
 /**
@@ -235,7 +235,7 @@ static INLINE void cooling_init_backend(struct swift_params* parameter_file,
   cooling->He_reion_heat_cgs *=
       units_cgs_conversion_factor(us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
 
-  /* Read the cooling tables */
+  /* Read the cooling table headers and allocate memory */
   eagle_cooling_init_redshift_tables(cooling);
   eagle_read_cooling_table_header(cooling);
   eagle_set_solar_metallicity(cooling);
@@ -268,5 +268,7 @@ static INLINE void cooling_print_backend(
   message("Helium reionisation heating: %e [erg/g]",
           cooling->He_reion_heat_cgs);
 }
+
+// MATTHIEU: to do: Infrastructure for check-pointing
 
 #endif /* SWIFT_COOLING_EAGLE_H */

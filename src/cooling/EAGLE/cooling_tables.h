@@ -33,7 +33,7 @@ void eagle_set_solar_metallicity(struct cooling_function_data *cooling);
 
 void eagle_allocate_cooling_tables(struct cooling_function_data *cooling);
 
-void ealge_check_cooling_tables(struct cooling_function_data *cooling,
+void eagle_check_cooling_tables(struct cooling_function_data *cooling,
                                 int index_z);
 
 #endif /* SWIFT_COOLING_TABLES_EAGLE_H */
