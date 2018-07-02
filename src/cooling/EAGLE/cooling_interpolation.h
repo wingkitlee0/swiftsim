@@ -127,7 +127,7 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
   }
 
 #ifdef SWIFT_DEBUG_CHECKS
-  if (*dx < 0.f || *dx > 1.f) error("Invalid distance found dx=%e", *dx);
+  if (*dx < -0.001f || *dx > 1.001f) error("Invalid distance found dx=%e", *dx);
 #endif
 }
 
@@ -136,8 +136,9 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
  *
  * This function uses linear interpolation along each axis.
  *
- * @param x, y, z, w Indices of element of interest
- * @param Nx, Ny, Nz, Nw Sizes of array dimensions
+ * @param table The 4D table to interpolate.
+ * @param xi, yi, zi, wi Indices of element of interest.
+ * @param Nx, Ny, Nz, Nw Sizes of array dimensions.
  * @param dx, dy, dz, dw Distance between the point and the index in units of
  * the grid spacing.
  */
@@ -147,10 +148,10 @@ __attribute__((always_inline)) INLINE float interpolation_4d(
     const float dy, const float dz, const float dw) {
 
 #ifdef SWIFT_DEBUG_CHECKS
-  if (dx < 0. || dx > 1.) error("Invalid dx=%e", dx);
-  if (dy < 0. || dy > 1.) error("Invalid dx=%e", dy);
-  if (dz < 0. || dz > 1.) error("Invalid dx=%e", dz);
-  if (dw < 0. || dw > 1.) error("Invalid dx=%e", dw);
+  if (dx < -0.001f || dx > 1.001f) error("Invalid dx=%e", dx);
+  if (dy < -0.001f || dy > 1.001f) error("Invalid dx=%e", dy);
+  if (dz < -0.001f || dz > 1.001f) error("Invalid dx=%e", dz);
+  if (dw < -0.001f || dw > 1.001f) error("Invalid dx=%e", dw);
 #endif
 
   const float tx = 1.f - dx;

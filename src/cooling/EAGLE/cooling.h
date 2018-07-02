@@ -103,29 +103,30 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   const float uold = hydro_get_physical_internal_energy(p, cosmo);
 
   /* Conversion to CGS system */
-  const float dt_cgs = dt * units_cgs_conversion_factor(us, UNIT_CONV_TIME);
-  const float rho_cgs =
+  const double dt_cgs = dt * units_cgs_conversion_factor(us, UNIT_CONV_TIME);
+  const double rho_cgs =
       rho * units_cgs_conversion_factor(us, UNIT_CONV_DENSITY);
-  const float uold_cgs =
+  const double uold_cgs =
       uold * units_cgs_conversion_factor(us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
 
   // MATTHIEU: to do: Add check for min energy here
 
   /* Compute metallicites as mass fractions of the smoothed metallicites */
-  float Z[chemistry_element_count];
+  double Z[chemistry_element_count];
   for (int i = 0; i < chemistry_element_count; ++i)
-    Z[i] = p->chemistry_data.smoothed_metal_mass_fraction[chemistry_element_H] *
-           mass_inv;
+    Z[i] =
+        p->chemistry_data.metal_mass_fraction[chemistry_element_H] * mass_inv;
+  // MATTHIEU: Change this to smoothed fractions when we have them !!!
 
   /* Do the cooling */
-  const float unew_cgs = eagle_do_cooling(cooling, uold_cgs, rho_cgs, dt_cgs,
-                                          delta_z, redshift, Z);
+  const double unew_cgs = eagle_do_cooling(cooling, uold_cgs, rho_cgs, dt_cgs,
+                                           delta_z, redshift, Z);
 
   // MATTHIEU: to do: Add check for min energy here
 
   /* Write back to the particle */
-  const float unew = unew_cgs / units_cgs_conversion_factor(
-                                    us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
+  const double unew = unew_cgs / units_cgs_conversion_factor(
+                                     us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
   hydro_set_internal_energy_dt(p, (unew - uold) / dt);
 }
 
@@ -257,7 +258,7 @@ static INLINE void cooling_print_backend(
 
   message("Cooling function is 'EAGLE'.");
 
-  message("CMB temperature at z=0: %e K", cooling->T_CMB_0);
+  message("CMB temperature at z=0: %f K", cooling->T_CMB_0);
   message("Compton rate: %e [g cm^2 s^-3 K^-1]", cooling->compton_rate_cgs);
 
   message("Hydrogen reionisation: z=%.2f", cooling->H_reion_z);

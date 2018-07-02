@@ -26,10 +26,10 @@
 #include "chemistry_struct.h"
 #include "cooling_struct.h"
 
-float eagle_do_cooling(const struct cooling_function_data* cooling,
-                       const float uold_cgs, const float rho_cgs,
-                       const float dt_cgs, const float delta_z,
-                       const float redshift,
-                       const float Z[chemistry_element_count]);
+double eagle_do_cooling(const struct cooling_function_data* cooling,
+                        const double uold_cgs, const double rho_cgs,
+                        const double dt_cgs, const double delta_z,
+                        const double redshift,
+                        const double Z[chemistry_element_count]);
 
 #endif /*SWIFT_COOLING_RATES_EAGLE_H */
