@@ -20,6 +20,7 @@
 #define SWIFT_COOLING_INTERPOLATION_EAGLE_H
 
 #include "align.h"
+#include "error.h"
 #include "expect.h"
 
 /*! Number of different bins along the redhsift axis of the tables */
