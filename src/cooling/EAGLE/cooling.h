@@ -56,7 +56,6 @@ INLINE static void cooling_update(const struct phys_const* phys_const,
                                   const struct unit_system* us,
                                   const struct cosmology* cosmo,
                                   struct cooling_function_data* cooling) {
-
   /* Current redshift */
   const float redshift = cosmo->z;
 
@@ -124,8 +123,6 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   /* Do the cooling */
   const double unew_cgs = eagle_do_cooling(cooling, uold_cgs, rho_cgs, dt_cgs,
                                            delta_z, redshift, Z);
-
-  // MATTHIEU: to do: Add check for min energy here
 
   /* Write back to the particle */
   double unew = unew_cgs /
@@ -208,7 +205,6 @@ static INLINE void cooling_init_backend(struct swift_params* parameter_file,
   cooling->T_CMB_0 = T_CMB_0; /* K */
 
   /* Compute the coefficient at the front of the Compton cooling expression */
-  /* This should be ~1.0178085e-37 g cm^2 s^-3 K^-5 */
   const double radiation_constant =
       4. * phys_const->const_stefan_boltzmann / phys_const->const_speed_light_c;
   const double compton_coefficient =
@@ -216,6 +212,8 @@ static INLINE void cooling_init_backend(struct swift_params* parameter_file,
       phys_const->const_boltzmann_k /
       (phys_const->const_electron_mass * phys_const->const_speed_light_c);
   const float dimension_coefficient[5] = {1, 2, -3, 0, -5};
+
+  /* This should be ~1.0178085e-37 g cm^2 s^-3 K^-5 */
   const double compton_coefficient_cgs =
       compton_coefficient *
       units_general_cgs_conversion_factor(us, dimension_coefficient);

@@ -19,6 +19,9 @@
 #ifndef SWIFT_COOLING_INTERPOLATION_EAGLE_H
 #define SWIFT_COOLING_INTERPOLATION_EAGLE_H
 
+#include "align.h"
+#include "expect.h"
+
 /*! Number of different bins along the redhsift axis of the tables */
 #define eagle_cooling_N_redshifts 49
 
@@ -117,15 +120,18 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
 
   // MATTHIEU: to do: Exploit alignment of the arrays
 
-  if (x < table[0]) { /* We are below the first element */
+  if (swift_unlikely_branch(x < table[0])) {
+    /* We are below the first element */
     *i = 0;
     *dx = 0.f;
-  } else if (x >= table[size - 1]) { /* We are after the last element */
-    *i = size - 2;
-    *dx = 1.f;
-  } else { /* Normal case */
+  } else if (x < table[size - 1]) {
+    /* Normal case */
     *i = (x - table[0]) * delta;
     *dx = (x - table[*i]) * delta;
+  } else {
+    /* We are after the last element */
+    *i = size - 2;
+    *dx = 1.f;
   }
 
 #ifdef SWIFT_DEBUG_CHECKS

@@ -71,8 +71,8 @@ void eagle_set_cooling_abundances(
     const float Z[chemistry_element_count],
     float element_abundance_solar[eagle_cooling_N_metal]) {
 
-  /* We copy over the Metals (i.e. ignoring H and He in the first 2 array
-   * elements). For S and Ca we use the Si abundance as we don't track
+  /* We copy over the Metals (i.e. ignoring H and He in the first 2 entries
+   * of Z[]). For S and Ca we use the Si abundance as we don't track
    * them individually. */
 
   element_abundance_solar[0] =
