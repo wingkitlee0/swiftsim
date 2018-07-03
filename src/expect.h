@@ -27,6 +27,8 @@
  *
  * It should be read as "I expect 'x' to be true".
  *
+ * Note that this turns into a no-op but gives information to the compiler.
+ *
  * Note: This should only be used for branches where the
  * compiler suggested this annotation when running with
  * the runtime profiler (-fprofile-generate with GCC).
@@ -40,6 +42,8 @@
  * this is the more unlikely one.
  *
  * It should be read as "I expect 'x' to be false".
+ *
+ * Note that this turns into a no-op but gives information to the compiler.
  *
  * Note: This should only be used for branches where the
  * compiler suggested this annotation when running with

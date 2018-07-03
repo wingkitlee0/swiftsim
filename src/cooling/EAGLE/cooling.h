@@ -75,6 +75,7 @@ INLINE static void cooling_update(const struct phys_const* phys_const,
  *
  * @param phys_const The physical constants in internal units.
  * @param us The internal system of units.
+ * @param hp The #hydro_props used in this run.
  * @param cosmo The current cosmological model.
  * @param cooling The #cooling_function_data used in the run.
  * @param p Pointer to the particle data.
