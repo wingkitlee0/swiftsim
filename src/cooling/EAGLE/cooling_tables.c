@@ -102,11 +102,12 @@ void eagle_cooling_init_redshift_tables(struct cooling_function_data* cooling) {
   if (cooling->table_redshifts == NULL)
     error("Error allocating table of redshifts");
 
-  // MATTHIEU: Change this to read a generic file name
-
   /* Open file */
-  FILE* file = fopen("redshifts.dat", "r");
-  if (file == NULL) error("Impossible to open the list of redshifts");
+  char filename[220];
+  sprintf(filename, "%s/redshifts.dat", cooling->table_directory);
+  FILE* file = fopen(filename, "r");
+  if (file == NULL)
+    error("Impossible to open the list of redshifts '%s'", filename);
 
   int num_redshifts;
   if (fscanf(file, "%d", &num_redshifts) != 1)
@@ -185,8 +186,8 @@ void read_hdf5_array(const hid_t h_file, const char* name, float* array) {
  */
 void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
 
-  // MATTHIEU: Change this to read a generic file name
-  const char* filename = "z_0.000.hdf5";
+  char filename[220];
+  sprintf(filename, "%s/z_0.000.hdf5", cooling->table_directory);
 
   /* Open file */
   const hid_t h_file = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -519,14 +520,16 @@ void eagle_load_cooling_tables(struct cooling_function_data* cooling) {
 
   // MATTHIEU: Optimize this. Can copy one table in the place of the other.
 
-  char filename[200];
+  char filename[220];
 
   /* Read the first table */
-  sprintf(filename, "z_%1.3f.hdf5", cooling->table_redshifts[low_z_index]);
+  sprintf(filename, "%s/z_%1.3f.hdf5", cooling->table_directory,
+          cooling->table_redshifts[low_z_index]);
   eagle_read_one_table(cooling, filename, 0);
 
   /* Read the second table */
-  sprintf(filename, "z_%1.3f.hdf5", cooling->table_redshifts[high_z_index]);
+  sprintf(filename, "%s/z_%1.3f.hdf5", cooling->table_directory,
+          cooling->table_redshifts[high_z_index]);
   eagle_read_one_table(cooling, filename, 1);
 }
 

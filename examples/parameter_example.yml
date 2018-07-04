@@ -189,6 +189,15 @@ LambdaCooling:
   hydrogen_mass_abundance:     0.75  # Hydrogen mass abundance (dimensionless)
   cooling_tstep_mult:          1.0   # Dimensionless pre-factor for the time-step condition
 
+# Parameters of the EAGLE cooling model.
+EagleCooling:
+  table_directory:         CoolingTables  # Directory (absolute or relative) where the cooling tables are stored.
+  H_reion_z:              11.0		  # Redshift of Hydrogen re-ionisation.
+  H_reion_heat_eVpH:       2.0		  # Energy injected by Hydrogen re-ionisation in eV per Hydrogen atom.
+  He_reion_z_centre:       3.5		  # Redshift of Helium re-ionisation.
+  He_reion_z_sigma:        0.5		  # Spread in redshift of the Helium re-ionisation.
+  He_reion_heat_eVpH:      2.0		  # Energy injected by Helium re-ionisation in eV per Hydrogen atom.
+
 # Cooling with Grackle 3.0
 GrackleCooling:
   CloudyTable: CloudyData_UVB=HM2012.h5 # Name of the Cloudy Table (available on the grackle bitbucket repository)

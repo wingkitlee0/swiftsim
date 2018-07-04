@@ -223,6 +223,10 @@ static INLINE void cooling_init_backend(struct swift_params* parameter_file,
   cooling->compton_rate_cgs =
       compton_coefficient_cgs * T_CMB_0 * T_CMB_0 * T_CMB_0 * T_CMB_0;
 
+  /* Read the location of the tables */
+  parser_get_param_string(parameter_file, "EagleCooling:table_directory",
+                          cooling->table_directory);
+
   /* Read parameters related to H reionisation */
   cooling->H_reion_z =
       parser_get_param_double(parameter_file, "EagleCooling:H_reion_z");
@@ -263,6 +267,7 @@ static INLINE void cooling_print_backend(
     const struct cooling_function_data* cooling) {
 
   message("Cooling function is 'EAGLE'.");
+  message("Cooling tables read from '%s/'", cooling->table_directory);
 
   message("CMB temperature at z=0: %f K", cooling->T_CMB_0);
   message("Compton rate: %e [g cm^2 s^-3 K^-1]", cooling->compton_rate_cgs);

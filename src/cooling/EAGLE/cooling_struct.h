@@ -75,6 +75,9 @@ struct cooling_function_data {
 
   /* Cooling tables -------------------------- */
 
+  /*! Directory where the tables are stored */
+  char table_directory[200];
+
   /*! Thermal energy to temperature */
   float *table_u_to_temp;
 
