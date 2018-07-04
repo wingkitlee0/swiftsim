@@ -6,14 +6,14 @@
 
 /*! Relative change in internal energy below which we allow the use of the
  * explicit time-integration solution */
-#define eagle_cooling_explicit_tolerance 0.05f
+#define eagle_cooling_explicit_tolerance 0.05
 
 /*! Relative change in internal energy we want the scheme to converge to */
-#define eagle_cooling_implicit_tolerance 1.e-6f
+#define eagle_cooling_implicit_tolerance 1.e-6
 
 /*! Factor used to increase/decrease the bracketing values in the implicit
  * solver */
-#define eagle_cooling_bracketing_factor 1.1f
+#define eagle_cooling_bracketing_factor 1.1
 
 /**
  * @brief Computes the extra heat from Helium reionisation at a given redshift.
@@ -36,21 +36,20 @@ double eagle_cooling_helium_reion_extra_heat(
 #endif
 
   /* Recover the values we need */
-  const double He_reion_z_centre = cooling->He_reion_z_centre;
-  const double He_reion_z_sigma = cooling->He_reion_z_sigma;
-  const double He_reion_heat_cgs = cooling->He_reion_heat_cgs;
+  const double z_centre = cooling->He_reion_z_centre;
+  const double z_sigma = cooling->He_reion_z_sigma;
+  const double heat_cgs = cooling->He_reion_heat_cgs;
 
   // MATTHIEU: to do: Optimize this.
 
   double extra_heat;
 
   /* Integral of the Gaussian between z and z - delta_z */
-  extra_heat =
-      erf((z - delta_z - He_reion_z_centre) / (M_SQRT2 * He_reion_z_sigma));
-  extra_heat -= erf((z - He_reion_z_centre) / (M_SQRT2 * He_reion_z_sigma));
+  extra_heat = erf((z - delta_z - z_centre) / (M_SQRT2 * z_sigma));
+  extra_heat -= erf((z - z_centre) / (M_SQRT2 * z_sigma));
 
   /* Multiply by the normalisation factor */
-  extra_heat *= He_reion_heat_cgs * 0.5;
+  extra_heat *= heat_cgs * 0.5;
 
   return extra_heat;
 }
@@ -159,7 +158,7 @@ float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
 
   /* Special case for the low-energy range */
   if (index_u == 0 && delta_u_table == 0.f)
-    return T * u_cgs / pow(10., cooling->table_u[0]);
+    return T * u_cgs / pow(10., (double)cooling->table_u[0]);
   else
     return T;
 }
@@ -278,7 +277,7 @@ double eagle_cooling_rate(const struct cooling_function_data* cooling,
   if ((redshift > cooling->table_redshifts[eagle_cooling_N_redshifts - 1]) ||
       (redshift > cooling->H_reion_z)) {
 
-    const double zp1 = 1.f + redshift;
+    const double zp1 = 1. + redshift;
     const double zp1p4 = zp1 * zp1 * zp1 * zp1;
 
     /* CMB temperature at this redshift */
@@ -392,7 +391,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
   double delta_u_cgs = rate_factor_cgs * Lambda_net * dt_cgs;
 
   /* Small cooling rate: Use explicit solution and abort */
-  if (fabsf(delta_u_cgs) < eagle_cooling_explicit_tolerance * uold_cgs) {
+  if (fabs(delta_u_cgs) < eagle_cooling_explicit_tolerance * uold_cgs) {
 
     /* Explicit solution */
     return uold_cgs + delta_u_cgs;
@@ -411,8 +410,8 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
   if (delta_u_cgs > 0.) { /* Net heating case */
 
-    u_upper_cgs *= sqrtf(eagle_cooling_bracketing_factor);
-    u_lower_cgs /= sqrtf(eagle_cooling_bracketing_factor);
+    u_upper_cgs *= sqrt(eagle_cooling_bracketing_factor);
+    u_lower_cgs /= sqrt(eagle_cooling_bracketing_factor);
 
     /* Compute a new rate */
     double Lambda_new =
@@ -433,8 +432,8 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
   if (delta_u_cgs < 0.) { /* Net cooling case */
 
-    u_upper_cgs *= sqrtf(eagle_cooling_bracketing_factor);
-    u_lower_cgs /= sqrtf(eagle_cooling_bracketing_factor);
+    u_upper_cgs *= sqrt(eagle_cooling_bracketing_factor);
+    u_lower_cgs /= sqrt(eagle_cooling_bracketing_factor);
 
     /* Compute a new rate */
     double Lambda_new =
@@ -480,7 +479,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
     /* Width of the range */
     delta_upper_lower = u_upper_cgs - u_lower_cgs;
 
-  } while (fabsf(delta_upper_lower) > eagle_cooling_implicit_tolerance * u_cgs);
+  } while (fabs(delta_upper_lower / u_cgs) > eagle_cooling_implicit_tolerance);
 
   return u_cgs;
 }
