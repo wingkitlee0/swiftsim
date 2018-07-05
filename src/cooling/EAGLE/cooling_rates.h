@@ -30,10 +30,15 @@ float eagle_convert_u_to_T(const struct cooling_function_data* cooling,
                            const double u_cgs, const double n_H_cgs,
                            const float He_frac);
 
-double eagle_cooling_rate(const struct cooling_function_data* cooling,
-                          const double u_cgs, const double n_H_cgs,
-                          const float He_frac, const double redshift,
-                          const float Z[chemistry_element_count]);
+double eagle_Compton_cooling_rate(const struct cooling_function_data* cooling,
+                                  const double redshift, const double n_H_cgs,
+                                  const double temperature,
+                                  const double electron_abundance);
+
+double eagle_total_cooling_rate(const struct cooling_function_data* cooling,
+                                const double u_cgs, const double n_H_cgs,
+                                const float He_frac, const double redshift,
+                                const float Z[chemistry_element_count]);
 
 double eagle_do_cooling(const struct cooling_function_data* cooling,
                         const double uold_cgs, const double rho_cgs,
