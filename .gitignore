@@ -45,6 +45,8 @@ examples/*/*/used_parameters.yml
 examples/*/*/unused_parameters.yml
 examples/*/*.mpg
 examples/*/gravity_checks_*.dat
+examples/CoolingTest/cooling_test
+examples/CoolingTest/cooling_rates.pdf
 
 tests/testActivePair
 tests/testActivePair.sh
