@@ -169,5 +169,6 @@ int main(int argc, char* argv[]) {
   }
 #endif
 
+  message("Done.");
   return 0;
 }

@@ -22,4 +22,4 @@ EagleCooling:
   He_reion_z_centre:       3.5
   He_reion_z_sigma:        0.5
   He_reion_heat_eVpH:      2.0
-  table_directory:         CoolingTables
+  table_directory:         coolingtables

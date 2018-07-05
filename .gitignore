@@ -47,6 +47,8 @@ examples/*/*.mpg
 examples/*/gravity_checks_*.dat
 examples/CoolingTest/cooling_test
 examples/CoolingTest/cooling_rates.pdf
+examples/CoolingTest/coolingtables/
+examples/CoolingTest/coolingtables.tar.gz
 
 tests/testActivePair
 tests/testActivePair.sh
