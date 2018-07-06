@@ -38,7 +38,10 @@ int main(int argc, char* argv[]) {
 #endif
 
   /* Check number of arguments */
-  if (argc != 3) error("Need to provide redshift and abundance ratio");
+  if (argc != 3) {
+    message("ERROR: Need to provide redshift and abundance ratio");
+    return 1;
+  }
 
   /* Read the redshift from the command line */
   double redshift;
@@ -99,7 +102,9 @@ int main(int argc, char* argv[]) {
 /* Test the EAGLE cooling */
 #if defined(COOLING_EAGLE)
 
+  /***********************************************************/
   /* Let's start by reproducing the Wiersma et al. figure 2. */
+  /***********************************************************/
 
   /* Solar abundances */
   float Z[chemistry_element_count] = {0.70649785,     // H
@@ -111,6 +116,7 @@ int main(int argc, char* argv[]) {
                                       5.907064E-4,    // Mg
                                       6.825874E-4,    // Si
                                       0.0011032152};  // Fe
+
   /* Abundance as a function of solar */
   float sum_Z = 0.f;
   for (int i = 0; i < chemistry_element_count; ++i) {
@@ -121,7 +127,7 @@ int main(int argc, char* argv[]) {
   }
 
   /* Helium farction */
-  const double He_frac = Z[1] / sum_Z;
+  const double He_frac = Z[1] / (Z[0] + Z[1]);
   message("Helium fraction: He_frac= %f", He_frac);
 
   /* Prepare the file header */
@@ -167,6 +173,52 @@ int main(int argc, char* argv[]) {
     }
     fprintf(file, "\n");
   }
+
+  message("");
+
+  /****************************************/
+  /* Let's now cool a particle over time  */
+  /****************************************/
+
+  const double n_H_cgs = 1.;
+  const double rho_cgs = n_H_cgs * func.const_proton_mass_cgs / Z[0];
+
+  const double log_u_old_cgs = 14.;
+  const double u_old_cgs = pow(10., log_u_old_cgs);
+  const double dt_cgs = 1e12; /* ~30000 years */
+  const double delta_z =
+      -0. * dt_cgs / units_cgs_conversion_factor(&us, UNIT_CONV_TIME) / cosmo.a;
+
+  /* Get the current temperature */
+  const double T_old = eagle_convert_u_to_T(&func, u_old_cgs, n_H_cgs, He_frac);
+
+  message("rho_cgs= %e", rho_cgs);
+  message("dt_cgs = %e", dt_cgs);
+
+  /* Cool! */
+  const double u_new_cgs =
+      eagle_do_cooling(&func, u_old_cgs, rho_cgs, dt_cgs, delta_z, cosmo.z, Z);
+
+  /* Get the new temperature */
+  double T_new = eagle_convert_u_to_T(&func, u_new_cgs, n_H_cgs, He_frac);
+
+  /* Now do the same thing with an explicit solver and small dt */
+  const int num_steps = 1000000;
+
+  double u_explicit_cgs = u_old_cgs;
+  for (int i = 0; i < num_steps; ++i) {
+    const double dt_exp_cgs = dt_cgs / num_steps;
+    u_explicit_cgs = eagle_do_cooling(&func, u_explicit_cgs, rho_cgs,
+                                      dt_exp_cgs, delta_z, cosmo.z, Z);
+  }
+
+  /* Temperature from the explicit solution */
+  double T_exp = eagle_convert_u_to_T(&func, u_explicit_cgs, n_H_cgs, He_frac);
+
+  message("u_old_cgs= %e, u_new_cgs= %e u_explicit= %e", u_old_cgs, u_new_cgs,
+          u_explicit_cgs);
+  message("T_old= %e T_new= %e T_exp= %e", T_old, T_new, T_exp);
+
 #endif
 
   message("Done.");

@@ -433,11 +433,13 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
   /* Small cooling rate: Use explicit solution and abort */
   if (fabs(first_delta_u_cgs) < eagle_cooling_explicit_tolerance * u_old_cgs) {
-
+    
     /* Explicit solution */
     return u_old_cgs + first_delta_u_cgs;
   }
 
+  message("Implicit!");
+  
   // MATTHIEU: to do: Bring forward the common calculation of indices and metal
   // arrays.
 
@@ -472,6 +474,8 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
   else if (first_delta_u_cgs < 0.) { /* Net cooling case */
 
+    message("net cooling");
+    
     u_upper_cgs *= sqrt(eagle_cooling_bracketing_factor);
     u_lower_cgs /= sqrt(eagle_cooling_bracketing_factor);
 
@@ -492,6 +496,8 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
     }
   }
 
+  message("upper=%e lower=%e", u_upper_cgs, u_lower_cgs);
+  
   /********************************************/
   /* We now have an upper and lower bound.    */
   /* Let's iterate by reducing the bracketing */
