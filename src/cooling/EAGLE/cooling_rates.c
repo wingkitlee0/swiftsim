@@ -55,8 +55,11 @@ double eagle_cooling_helium_reion_extra_heat(
 }
 
 /**
- * @brief Sets the element abundances in units of the solar abundances
+ * @brief Sets the Metal abundances in units of the solar abundances
  * assumed by the cooling tables.
+ *
+ * Note that the resulting table does *not* contain H and He since
+ * we only want the metals.
  *
  * Calcium and Sulphur are not tracked by the hydro scheme. We use
  * the Silicon abundance for them.
@@ -355,8 +358,18 @@ double eagle_total_cooling_rate(const struct cooling_function_data* cooling,
  * @brief Compute the new energy of a particle based on its current
  * properties.
  *
+ * We want to compute u_new such that u_new = u_old + dt * du/dt(u_new, X),
+ * where X stands for the metallicity, density and redshift.
+ *
+ * We first compute du/dt(u_old). If dt * du/dt(u_old) is small enough, we
+ * use an explicit integration and use this as our solution.
+ *
+ * Otherwise, we try to find a solution to the implicit time-integration
+ * problem. This is done by first bracketing the solution and then iterating
+ * towards the solution by reducing the window down a certain tolerance.
+ *
  * @param cooling The #cooling_function_data used in the run.
- * @param uold_cgs The old internal energy per unit mass in CGS units.
+ * @param u_old_cgs The old internal energy per unit mass in CGS units.
  * @param rho_cgs The current density in CGS units.
  * @param dt_cgs The time-step over which to cool in CGS units.
  * @param delta_z The time-step expressed as a change in redshift. This is
@@ -367,7 +380,7 @@ double eagle_total_cooling_rate(const struct cooling_function_data* cooling,
  * @return The new internal energy in CGS units.
  */
 double eagle_do_cooling(const struct cooling_function_data* cooling,
-                        const double uold_cgs, const double rho_cgs,
+                        const double u_old_cgs, const double rho_cgs,
                         const double dt_cgs, const double delta_z,
                         const double redshift,
                         const float Z[chemistry_element_count]) {
@@ -375,7 +388,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 #ifdef SWIFT_DEBUG_CHECKS
   if (delta_z > 0.f) error("Invalid value for delta_z. Should be negative.");
   if (rho_cgs == 0.) error("Density is 0. Aborting.");
-  if (uold_cgs == 0.) error("Internal energy is 0. Aborting.");
+  if (u_old_cgs == 0.) error("Internal energy is 0. Aborting.");
 #endif
 
   /* Hydrogen fraction */
@@ -389,6 +402,10 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
   /* Helium fraction */
   const float He_frac =
       Z[chemistry_element_He] / (XH + Z[chemistry_element_He]);
+
+#ifdef SWIFT_DEBUG_CHECKS
+  if (He_frac > 1.f) error("Helium fraction is >1. Something is really odd...");
+#endif
 
   /* Hydrogen number density */
   const double n_H_cgs = rho_cgs * XH / cooling->const_proton_mass_cgs;
@@ -409,16 +426,16 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
   /* First guess */
   double Lambda_net =
-      Lambda_reion + eagle_total_cooling_rate(cooling, uold_cgs, n_H_cgs,
+      Lambda_reion + eagle_total_cooling_rate(cooling, u_old_cgs, n_H_cgs,
                                               He_frac, redshift, Z);
 
-  double delta_u_cgs = rate_factor_cgs * Lambda_net * dt_cgs;
+  const double first_delta_u_cgs = rate_factor_cgs * Lambda_net * dt_cgs;
 
   /* Small cooling rate: Use explicit solution and abort */
-  if (fabs(delta_u_cgs) < eagle_cooling_explicit_tolerance * uold_cgs) {
+  if (fabs(first_delta_u_cgs) < eagle_cooling_explicit_tolerance * u_old_cgs) {
 
     /* Explicit solution */
-    return uold_cgs + delta_u_cgs;
+    return u_old_cgs + first_delta_u_cgs;
   }
 
   // MATTHIEU: to do: Bring forward the common calculation of indices and metal
@@ -428,11 +445,10 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
   /* Let's try to bracket the solution */
   /*************************************/
 
-  double u_cgs = uold_cgs;
-  double u_lower_cgs = u_cgs;
-  double u_upper_cgs = u_cgs;
+  double u_lower_cgs = u_old_cgs;
+  double u_upper_cgs = u_old_cgs;
 
-  if (delta_u_cgs > 0.) { /* Net heating case */
+  if (first_delta_u_cgs > 0.) { /* Net heating case */
 
     u_upper_cgs *= sqrt(eagle_cooling_bracketing_factor);
     u_lower_cgs /= sqrt(eagle_cooling_bracketing_factor);
@@ -442,7 +458,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
                                                  He_frac, redshift, Z);
     double delta_new_cgs = u_reion_cgs + Lambda_new * rate_factor_cgs * dt_cgs;
 
-    while (u_upper_cgs - uold_cgs - delta_new_cgs < 0.) {
+    while (u_upper_cgs - u_old_cgs - delta_new_cgs < 0.) {
 
       u_upper_cgs *= eagle_cooling_bracketing_factor;
       u_lower_cgs *= eagle_cooling_bracketing_factor;
@@ -454,7 +470,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
     }
   }
 
-  if (delta_u_cgs < 0.) { /* Net cooling case */
+  else if (first_delta_u_cgs < 0.) { /* Net cooling case */
 
     u_upper_cgs *= sqrt(eagle_cooling_bracketing_factor);
     u_lower_cgs /= sqrt(eagle_cooling_bracketing_factor);
@@ -464,7 +480,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
                                                  He_frac, redshift, Z);
     double delta_new_cgs = u_reion_cgs + Lambda_new * rate_factor_cgs * dt_cgs;
 
-    while (u_lower_cgs - uold_cgs - delta_new_cgs > 0.) {
+    while (u_lower_cgs - u_old_cgs - delta_new_cgs > 0.) {
 
       u_upper_cgs /= eagle_cooling_bracketing_factor;
       u_lower_cgs /= eagle_cooling_bracketing_factor;
@@ -482,29 +498,32 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
   /********************************************/
 
   double delta_upper_lower = 0.;
+  double u_new_cgs;
+
   do {
 
     /* New guess */
-    u_cgs = 0.5f * (u_lower_cgs + u_upper_cgs);
+    u_new_cgs = 0.5f * (u_lower_cgs + u_upper_cgs);
 
     /* New rate */
     Lambda_net =
-        Lambda_reion +
-        eagle_total_cooling_rate(cooling, u_cgs, n_H_cgs, He_frac, redshift, Z);
+        Lambda_reion + eagle_total_cooling_rate(cooling, u_new_cgs, n_H_cgs,
+                                                He_frac, redshift, Z);
 
     /* New change in energy */
-    delta_u_cgs = rate_factor_cgs * Lambda_net * dt_cgs;
+    const double delta_u_cgs = rate_factor_cgs * Lambda_net * dt_cgs;
 
     /* Bracketing */
-    if (u_cgs - uold_cgs - delta_u_cgs > 0.)
-      u_upper_cgs = u_cgs;
+    if (u_new_cgs - u_old_cgs - delta_u_cgs > 0.)
+      u_upper_cgs = u_new_cgs;
     else
-      u_lower_cgs = u_cgs;
+      u_lower_cgs = u_new_cgs;
 
     /* Width of the range */
     delta_upper_lower = u_upper_cgs - u_lower_cgs;
 
-  } while (fabs(delta_upper_lower / u_cgs) > eagle_cooling_implicit_tolerance);
+  } while (fabs(delta_upper_lower / u_new_cgs) >
+           eagle_cooling_implicit_tolerance);
 
-  return u_cgs;
+  return u_new_cgs;
 }
