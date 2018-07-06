@@ -87,9 +87,9 @@ void eagle_set_cooling_abundances(
   element_abundance_solar[5] =
       Z[7] / cooling->table_solar_abundances[7]; /* Si */
   element_abundance_solar[6] =
-      Z[7] / cooling->table_solar_abundances[8]; /* S  */
+      Z[7] / cooling->table_solar_abundances[7]; /* S  */
   element_abundance_solar[7] =
-      Z[7] / cooling->table_solar_abundances[9]; /* Ca */
+      Z[7] / cooling->table_solar_abundances[7]; /* Ca */
   element_abundance_solar[8] =
       Z[8] / cooling->table_solar_abundances[10]; /* Fe */
 
