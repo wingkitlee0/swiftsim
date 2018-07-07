@@ -359,14 +359,21 @@ double eagle_total_cooling_rate(const struct cooling_function_data* cooling,
  * properties.
  *
  * We want to compute u_new such that u_new = u_old + dt * du/dt(u_new, X),
- * where X stands for the metallicity, density and redshift.
+ * where X stands for the metallicity, density and redshift. These are
+ * kept constant.
  *
  * We first compute du/dt(u_old). If dt * du/dt(u_old) is small enough, we
  * use an explicit integration and use this as our solution.
  *
  * Otherwise, we try to find a solution to the implicit time-integration
- * problem. This is done by first bracketing the solution and then iterating
- * towards the solution by reducing the window down a certain tolerance.
+ * problem. This leads to the root-finding problem:
+ *
+ * f(u_new) = u_new - u_old - dt*du/(u_new, X) = 0
+ *
+ * This is done by first bracketing the solution and then iterating
+ * towards the solution by reducing the window down to a certain tolerance.
+ * Note there is always at least one solution since
+ * f(+inf) is < 0 and f(-inf) is > 0.
  *
  * @param cooling The #cooling_function_data used in the run.
  * @param u_old_cgs The old internal energy per unit mass in CGS units.
@@ -433,13 +440,13 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
   /* Small cooling rate: Use explicit solution and abort */
   if (fabs(first_delta_u_cgs) < eagle_cooling_explicit_tolerance * u_old_cgs) {
-    
+
     /* Explicit solution */
     return u_old_cgs + first_delta_u_cgs;
   }
 
   message("Implicit!");
-  
+
   // MATTHIEU: to do: Bring forward the common calculation of indices and metal
   // arrays.
 
@@ -475,7 +482,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
   else if (first_delta_u_cgs < 0.) { /* Net cooling case */
 
     message("net cooling");
-    
+
     u_upper_cgs *= sqrt(eagle_cooling_bracketing_factor);
     u_lower_cgs /= sqrt(eagle_cooling_bracketing_factor);
 
@@ -497,7 +504,7 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
   }
 
   message("upper=%e lower=%e", u_upper_cgs, u_lower_cgs);
-  
+
   /********************************************/
   /* We now have an upper and lower bound.    */
   /* Let's iterate by reducing the bracketing */
