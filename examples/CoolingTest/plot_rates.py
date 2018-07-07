@@ -60,17 +60,17 @@ y_max = 3e-21
 
 # Plot the net heating and cooling rates for a selection of densities
 figure()
-loglog(T_m6, du_dt_m6, '--', color='C0', lw=1)
-loglog(T_m6, -du_dt_m6, '-', color='C0', lw=1, label="$n_{\\rm H} = 10^{-6}$")
+loglog(T_m6, du_dt_m6, '--', color='#1f77b4', lw=1)
+loglog(T_m6, -du_dt_m6, '-', color='#1f77b4', lw=1, label="$n_{\\rm H} = 10^{-6}$")
 
-loglog(T_m4, du_dt_m4, '--', color='C1', lw=1)
-loglog(T_m4, -du_dt_m4, '-', color='C1', lw=1, label="$n_{\\rm H} = 10^{-4}$")
+loglog(T_m4, du_dt_m4, '--', color='#ff7f0e', lw=1)
+loglog(T_m4, -du_dt_m4, '-', color='#ff7f0e', lw=1, label="$n_{\\rm H} = 10^{-4}$")
 
-loglog(T_m2, du_dt_m2, '--', color='C2', lw=1)
-loglog(T_m2, -du_dt_m2, '-', color='C2', lw=1, label="$n_{\\rm H} = 10^{-2}$")
+loglog(T_m2, du_dt_m2, '--', color='#2ca02c', lw=1)
+loglog(T_m2, -du_dt_m2, '-', color='#2ca02c', lw=1, label="$n_{\\rm H} = 10^{-2}$")
 
-loglog(T_0, du_dt_0, '--', color='C3', lw=1)
-loglog(T_0, -du_dt_0, '-', color='C3', lw=1, label="$n_{\\rm H} = 10^{0}$")
+loglog(T_0, du_dt_0, '--', color='#d62728', lw=1)
+loglog(T_0, -du_dt_0, '-', color='#d62728', lw=1, label="$n_{\\rm H} = 10^{0}$")
 
 text(3.5e8, 2.35e-21, "$z=%.3f$\n$Z/Z_\\odot=%.3f$"%(redshift, abundance), ha="right", va="top", fontsize=8.5, backgroundcolor='w')
 

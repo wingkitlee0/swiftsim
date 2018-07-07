@@ -28,5 +28,5 @@ bin_PROGRAMS = cooling_test
 # Sources
 cooling_test_SOURCES = cooling_test.c
 cooling_test_CFLAGS = $(MYFLAGS) $(AM_CFLAGS)
-cooling_test_LDADD =  ../../src/.libs/libswiftsim.a $(EXTRA_LIBS)
+cooling_test_LDADD =  ../../src/.libs/libswiftsim.a $(EXTRA_LIBS) $(AM_LDFLAGS)
 
