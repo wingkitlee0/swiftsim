@@ -368,7 +368,7 @@ double eagle_total_cooling_rate(const struct cooling_function_data* cooling,
  * Otherwise, we try to find a solution to the implicit time-integration
  * problem. This leads to the root-finding problem:
  *
- * f(u_new) = u_new - u_old - dt*du/(u_new, X) = 0
+ * f(u_new) = u_new - u_old - dt * du/dt(u_new, X) = 0
  *
  * This is done by first bracketing the solution and then iterating
  * towards the solution by reducing the window down to a certain tolerance.
