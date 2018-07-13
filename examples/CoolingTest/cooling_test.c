@@ -128,6 +128,7 @@ int main(int argc, char* argv[]) {
 
   /* Helium farction */
   const double He_frac = Z[1] / (Z[0] + Z[1]);
+  // const double He_frac = Z[1];
   message("Helium fraction: He_frac= %f", He_frac);
 
   /* Prepare the file header */
@@ -182,6 +183,7 @@ int main(int argc, char* argv[]) {
 
   const double n_H_cgs = 1.;
   const double rho_cgs = n_H_cgs * func.const_proton_mass_cgs / Z[0];
+  const double m_cgs = 1e6 * 1.989e33; /* ~ EAGLE particle mass */
 
   const double log_u_old_cgs = 14.;
   const double u_old_cgs = pow(10., log_u_old_cgs);
@@ -195,6 +197,15 @@ int main(int argc, char* argv[]) {
   message("rho_cgs= %e", rho_cgs);
   message("dt_cgs = %e", dt_cgs);
 
+  const double c_cgs = gas_soundspeed_from_internal_energy(rho_cgs, u_old_cgs);
+  message("c_cgs= %e", c_cgs);
+
+  const double h_cgs = 1.2348 * cbrt(m_cgs / rho_cgs);
+  message("Smoothing length: h_cgs= %e", h_cgs);
+
+  const double dt_courant_cgs = 2.f * kernel_gamma * 0.1 * h_cgs / c_cgs;
+  message("dt_courant_cgs= %e", dt_courant_cgs);
+
   /* Cool! */
   const double u_new_cgs =
       eagle_do_cooling(&func, u_old_cgs, rho_cgs, dt_cgs, delta_z, cosmo.z, Z);
@@ -203,11 +214,11 @@ int main(int argc, char* argv[]) {
   double T_new = eagle_convert_u_to_T(&func, u_new_cgs, n_H_cgs, He_frac);
 
   /* Now do the same thing with an explicit solver and small dt */
-  const int num_steps = 1000000;
+  const int num_steps = 10000;
 
   double u_explicit_cgs = u_old_cgs;
+  const double dt_exp_cgs = dt_cgs / num_steps;
   for (int i = 0; i < num_steps; ++i) {
-    const double dt_exp_cgs = dt_cgs / num_steps;
     u_explicit_cgs = eagle_do_cooling(&func, u_explicit_cgs, rho_cgs,
                                       dt_exp_cgs, delta_z, cosmo.z, Z);
   }
@@ -218,6 +229,24 @@ int main(int argc, char* argv[]) {
   message("u_old_cgs= %e, u_new_cgs= %e u_explicit= %e", u_old_cgs, u_new_cgs,
           u_explicit_cgs);
   message("T_old= %e T_new= %e T_exp= %e", T_old, T_new, T_exp);
+
+  const double rate = n_H_cgs * Z[0] / func.const_proton_mass_cgs;
+
+  file = fopen("f.dat", "w");
+  fprintf(file, "# u_new, f(u_new)\n");
+
+  double u_test_cgs = u_old_cgs;
+  for (int i = 0; i < num_steps; ++i) {
+
+    u_test_cgs = u_old_cgs - 0.999 * i * u_old_cgs / num_steps;
+
+    const double du_dt = eagle_total_cooling_rate(&func, u_test_cgs, n_H_cgs,
+                                                  He_frac, cosmo.z, Z);
+    const double f_u = u_test_cgs - u_old_cgs - dt_cgs * du_dt * rate;
+
+    fprintf(file, "%e %e %e\n", u_test_cgs, f_u, du_dt * rate * dt_cgs);
+  }
+  fclose(file);
 
 #endif
 
