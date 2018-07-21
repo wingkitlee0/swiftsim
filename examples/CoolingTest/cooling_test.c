@@ -107,16 +107,18 @@ int main(int argc, char* argv[]) {
   /***********************************************************/
 
   /* Solar abundances */
-  float Z[chemistry_element_count] = {0.70649785,     // H
-                                      0.28055534,     // He
-                                      0.0020665438,   // C
-                                      8.3562563E-4,   // N
-                                      0.0054926244,   // O
-                                      0.0014144605,   // Ne
-                                      5.907064E-4,    // Mg
-                                      6.825874E-4,    // Si
-                                      0.0011032152};  // Fe
+  /* float Z[chemistry_element_count] = {0.70649785,     // H */
+  /*                                     0.28055534,     // He */
+  /*                                     0.0020665438,   // C */
+  /*                                     8.3562563E-4,   // N */
+  /*                                     0.0054926244,   // O */
+  /*                                     0.0014144605,   // Ne */
+  /*                                     5.907064E-4,    // Mg */
+  /*                                     6.825874E-4,    // Si */
+  /*                                     0.0011032152};  // Fe */
 
+  float Z[chemistry_element_count] = {0.752, 0.248, 0.};
+  
   /* Abundance as a function of solar */
   float sum_Z = 0.f;
   for (int i = 0; i < chemistry_element_count; ++i) {
@@ -126,6 +128,13 @@ int main(int argc, char* argv[]) {
     sum_Z += Z[i];
   }
 
+  /* Print abundance pattern */
+  printf("[00000.1] main: Z= [ ");
+  for (int i = 0; i < chemistry_element_count; ++i) {
+    printf("%f ", Z[i]);
+  }
+  printf("] \n");
+  
   /* Helium farction */
   const double He_frac = Z[1] / (Z[0] + Z[1]);
   // const double He_frac = Z[1];
@@ -181,19 +190,20 @@ int main(int argc, char* argv[]) {
   /* Let's now cool a particle over time  */
   /****************************************/
 
-  const double n_H_cgs = 1.;
+  const double n_H_cgs = 1e-4;
   const double rho_cgs = n_H_cgs * func.const_proton_mass_cgs / Z[0];
   const double m_cgs = 1e6 * 1.989e33; /* ~ EAGLE particle mass */
 
-  const double log_u_old_cgs = 14.;
-  const double u_old_cgs = pow(10., log_u_old_cgs);
-  const double dt_cgs = 1e12; /* ~30000 years */
+  //const double log_u_old_cgs = 13.32;
+  const double u_old_cgs = 2e13;//pow(10., log_u_old_cgs);
+  const double dt_cgs = 0.75e16; /* ~300'000'000 years */
   const double delta_z =
       -0. * dt_cgs / units_cgs_conversion_factor(&us, UNIT_CONV_TIME) / cosmo.a;
 
   /* Get the current temperature */
   const double T_old = eagle_convert_u_to_T(&func, u_old_cgs, n_H_cgs, He_frac);
 
+  message("n_H_cgs= %e", n_H_cgs);
   message("rho_cgs= %e", rho_cgs);
   message("dt_cgs = %e", dt_cgs);
 
@@ -214,7 +224,7 @@ int main(int argc, char* argv[]) {
   double T_new = eagle_convert_u_to_T(&func, u_new_cgs, n_H_cgs, He_frac);
 
   /* Now do the same thing with an explicit solver and small dt */
-  const int num_steps = 10000;
+  const int num_steps = 1000000;
 
   double u_explicit_cgs = u_old_cgs;
   const double dt_exp_cgs = dt_cgs / num_steps;
