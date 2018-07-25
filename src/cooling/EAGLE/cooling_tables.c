@@ -76,7 +76,7 @@ void eagle_get_redshift_table_index(const float z,
     /* Search the list of redshifts */
     for (int i = eagle_cooling_N_redshifts - 2; i >= 0; --i) {
 
-      if (z > table_redshifts[i]) {
+      if (z >= table_redshifts[i]) {
 
         *z_index = i;
         *delta_z = (z - table_redshifts[i]) /
