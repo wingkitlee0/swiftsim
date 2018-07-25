@@ -329,7 +329,7 @@ double eagle_total_cooling_rate(const struct cooling_function_data* cooling,
   /**********************/
 
   /* We start by setting the solar abundances */
-  float element_abundance_solar[eagle_cooling_N_metal];
+  float element_abundance_solar[eagle_cooling_N_metal] SWIFT_CACHE_ALIGN;
   eagle_set_cooling_abundances(cooling, Z, element_abundance_solar);
 
   /* Loop over the metals */
