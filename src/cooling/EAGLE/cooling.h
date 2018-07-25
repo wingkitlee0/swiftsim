@@ -129,10 +129,28 @@ __attribute__((always_inline)) INLINE static void cooling_cool_part(
   double unew = unew_cgs /
                 units_cgs_conversion_factor(us, UNIT_CONV_ENERGY_PER_UNIT_MASS);
 
+  /* if(p->id == 1) { */
+  /*   message("uold_cgs = %e unew_cgs = %e", uold_cgs, unew_cgs); */
+  /*   message("uold = %e unew = %e", uold, unew); */
+  /*   message("dt = %e", dt); */
+  /*   message("du/dt = %e", (unew - uold) / dt); */
+  /*   message("old dS/dt = %e", p->entropy_dt); */
+  /*   message("rho=%e", p->rho); */
+  /*   message("gamma-1=%e", hydro_gamma_minus_one); */
+  /*   message("rho^g-1 = %e", pow_minus_gamma_minus_one(p->rho)); */
+  /*   message("my dS/dt= %e", hydro_gamma_minus_one * ( (unew - uold) / dt) * pow_minus_gamma_minus_one(p->rho)); */
+  /* } */
+
   /* Check for minimal energy */
-  unew = max(uold, hp->minimal_internal_energy);
+  unew = max(unew, hp->minimal_internal_energy);
 
   hydro_set_internal_energy_dt(p, (unew - uold) / dt);
+  /* if(p->id == 1) { */
+  /*   message("new dS/dt = %e", p->entropy_dt); */
+  /*   float new_du_dt = hydro_get_internal_energy_dt(p); */
+  /*   message("du/dt = %e", new_du_dt); */
+  /*   message("du=%e", new_du_dt * dt); */
+  /* } */
 }
 
 /**
