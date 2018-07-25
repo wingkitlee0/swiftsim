@@ -441,8 +441,6 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
     return u_old_cgs + first_delta_u_cgs;
   }
 
-  message("Implicit!");
-
   // MATTHIEU: to do: Bring forward the common calculation of indices and metal
   // arrays.
 
@@ -477,8 +475,6 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
 
   else if (first_delta_u_cgs < 0.) { /* Net cooling case */
 
-    message("net cooling");
-
     u_upper_cgs *= sqrt(eagle_cooling_bracketing_factor);
     u_lower_cgs /= sqrt(eagle_cooling_bracketing_factor);
 
@@ -498,8 +494,6 @@ double eagle_do_cooling(const struct cooling_function_data* cooling,
       delta_new_cgs = u_reion_cgs + Lambda_new * rate_factor_cgs * dt_cgs;
     }
   }
-
-  message("upper=%e lower=%e", u_upper_cgs, u_lower_cgs);
 
   /********************************************/
   /* We now have an upper and lower bound.    */
