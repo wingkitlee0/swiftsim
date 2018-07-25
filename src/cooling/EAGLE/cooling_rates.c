@@ -78,25 +78,23 @@ void eagle_set_cooling_abundances(
    * them individually. */
 
   element_abundance_solar[0] =
-      Z[2] / cooling->table_solar_abundances[2]; /* C  */
+      Z[2] * cooling->table_solar_abundances_inv[2]; /* C  */
   element_abundance_solar[1] =
-      Z[3] / cooling->table_solar_abundances[3]; /* N  */
+      Z[3] * cooling->table_solar_abundances_inv[3]; /* N  */
   element_abundance_solar[2] =
-      Z[4] / cooling->table_solar_abundances[4]; /* O  */
+      Z[4] * cooling->table_solar_abundances_inv[4]; /* O  */
   element_abundance_solar[3] =
-      Z[5] / cooling->table_solar_abundances[5]; /* Ne */
+      Z[5] * cooling->table_solar_abundances_inv[5]; /* Ne */
   element_abundance_solar[4] =
-      Z[6] / cooling->table_solar_abundances[6]; /* Mg */
+      Z[6] * cooling->table_solar_abundances_inv[6]; /* Mg */
   element_abundance_solar[5] =
-      Z[7] / cooling->table_solar_abundances[7]; /* Si */
+      Z[7] * cooling->table_solar_abundances_inv[7]; /* Si */
   element_abundance_solar[6] =
-      Z[7] / cooling->table_solar_abundances[7]; /* S  */
+      Z[7] * cooling->table_solar_abundances_inv[7]; /* S  */
   element_abundance_solar[7] =
-      Z[7] / cooling->table_solar_abundances[7]; /* Ca */
+      Z[7] * cooling->table_solar_abundances_inv[7]; /* Ca */
   element_abundance_solar[8] =
-      Z[8] / cooling->table_solar_abundances[10]; /* Fe */
-
-  // MATTHIEU: to do: Create array with pre-computed inverse abundances
+      Z[8] * cooling->table_solar_abundances_inv[10]; /* Fe */
 }
 
 /**

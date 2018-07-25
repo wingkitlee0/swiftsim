@@ -107,17 +107,17 @@ int main(int argc, char* argv[]) {
   /***********************************************************/
 
   /* Solar abundances */
-  /* float Z[chemistry_element_count] = {0.70649785,     // H */
-  /*                                     0.28055534,     // He */
-  /*                                     0.0020665438,   // C */
-  /*                                     8.3562563E-4,   // N */
-  /*                                     0.0054926244,   // O */
-  /*                                     0.0014144605,   // Ne */
-  /*                                     5.907064E-4,    // Mg */
-  /*                                     6.825874E-4,    // Si */
-  /*                                     0.0011032152};  // Fe */
+  float Z[chemistry_element_count] = {0.70649785,     // H
+                                      0.28055534,     // He
+                                      0.0020665438,   // C
+                                      8.3562563E-4,   // N
+                                      0.0054926244,   // O
+                                      0.0014144605,   // Ne
+                                      5.907064E-4,    // Mg
+                                      6.825874E-4,    // Si
+                                      0.0011032152};  // Fe
 
-  float Z[chemistry_element_count] = {0.752, 0.248, 0.};
+  //float Z[chemistry_element_count] = {0.752, 0.248, 0.};
   
   /* Abundance as a function of solar */
   float sum_Z = 0.f;

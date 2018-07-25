@@ -249,7 +249,7 @@ void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
     error("Error allocating memory for Helium abundance table");
 
   /* Table for solar abundance */
-  if(posix_memalign((void**) &cooling->table_solar_abundances, 64,
+  if(posix_memalign((void**) &cooling->table_solar_abundances_inv, 64,
 		    eagle_cooling_N_abundances * sizeof(float)) != 0)
     error("Error allocating memory for solar abundance table");
 
@@ -272,13 +272,14 @@ void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
 
   /* Solar abundances bins */
   read_hdf5_array(h_file, "/Header/Abundances/Solar_mass_fractions",
-                  cooling->table_solar_abundances);
+                  cooling->table_solar_abundances_inv);
 
   // MATTHIEU: to do: Check that the metals are in the same order
 
   H5Fclose(h_file);
 
   /* Finally turn the quantities in their log values */
+  /* And compute the inverse of the solar abundances */
 
   /* Temperatures */
   for (int i = 0; i < eagle_cooling_N_temperature; ++i)
@@ -291,6 +292,10 @@ void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
   /* Internal energies */
   for (int i = 0; i < eagle_cooling_N_temperature; ++i)
     cooling->table_u[i] = log10f(cooling->table_u[i]);
+
+  /* Inverse of solar abundances */
+  for (int i = 0; i < eagle_cooling_N_abundances; ++i)
+    cooling->table_solar_abundances_inv[i] = 1.f / cooling->table_solar_abundances_inv[i];
 }
 
 /**
@@ -306,10 +311,10 @@ void eagle_set_solar_metallicity(struct cooling_function_data* cooling) {
   cooling->solar_metallicity = 1.f;
 
   /* Deduct Hydrogen abundance */
-  cooling->solar_metallicity -= cooling->table_solar_abundances[0];
+  cooling->solar_metallicity -= 1.f / cooling->table_solar_abundances_inv[0];
 
   /* Deduct Helium abundance */
-  cooling->solar_metallicity -= cooling->table_solar_abundances[1];
+  cooling->solar_metallicity -= 1.f / cooling->table_solar_abundances_inv[1];
 
   message("Solar metallicity of the tables: Z=%f", cooling->solar_metallicity);
 }

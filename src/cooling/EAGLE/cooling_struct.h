@@ -67,8 +67,8 @@ struct cooling_function_data {
   /*! The He abundances of the cooling tables */
   float *table_He_frac;
 
-  /*! The solar abundances of the cooling tables */
-  float *table_solar_abundances;
+  /*! The inverse of the solar abundances of the cooling tables */
+  float *table_solar_abundances_inv;
 
   /*! The solar metallicity of the cooling tables */
   float solar_metallicity;
