@@ -432,7 +432,7 @@ void eagle_read_one_table(struct cooling_function_data* cooling,
 
         /* Get indices in both tables */
         const int index_4d = row_major_index_4d(
-            z_index, elem, i, j, 2, eagle_cooling_N_metal,
+	    elem, z_index, i, j, eagle_cooling_N_metal, 2,
             eagle_cooling_N_density, eagle_cooling_N_temperature);
 
         const int index_2d = row_major_index_2d(

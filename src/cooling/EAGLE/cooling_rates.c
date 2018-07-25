@@ -227,13 +227,13 @@ double eagle_Compton_cooling_rate(const struct cooling_function_data* cooling,
  * 5) Metal-line cooling
  * For each tracked element we interpolate the flattened 4D table
  * 'table_metals_net_heating' that is arrange in the following way:
- * - 1st dim: redshift, length = 2
- * - 2nd dim: element, length = eagle_cooling_N_metal
+ * - 1st dim: element, length = eagle_cooling_N_metal
+ * - 2nd dim: redshift, length = 2
  * - 3rd dim: Hydrogen density, length = eagle_cooling_N_density
  * - 4th dim: Internal energy, length = eagle_cooling_N_temperature
  *
  * Note that this is a fake 4D interpolation as we do not interpolate
- * along the 2nd dimension. We just do this once per element.
+ * along the 1st dimension. We just do this once per element.
  *
  * @param cooling The #cooling_function_data used in the run.
  * @param u_cgs The internal energy in CGS units.
@@ -336,12 +336,10 @@ double eagle_total_cooling_rate(const struct cooling_function_data* cooling,
   for (int i = 0; i < eagle_cooling_N_metal; ++i) {
     if (element_abundance_solar[i] > 0.) {
 
-      // MATTHIEU: to do: Transpose array to have Z as 1st dimension
-
-      const double Lambda_elem = interpolation_4d_no_y(
-          cooling->table_metals_net_heating, 0, i, index_nH, index_T, 2,
-          eagle_cooling_N_metal, eagle_cooling_N_density,
-          eagle_cooling_N_temperature, delta_z_table, 0.f, delta_nH_table,
+      const double Lambda_elem = interpolation_4d_no_x(
+	  cooling->table_metals_net_heating, i, 0, index_nH, index_T,
+          eagle_cooling_N_metal, 2, eagle_cooling_N_density,
+          eagle_cooling_N_temperature, 0.f, delta_z_table, delta_nH_table,
           delta_T_table);
 
       Lambda_net += Lambda_elem * abundance_ratio * element_abundance_solar[i];
