@@ -119,7 +119,8 @@ __attribute__((always_inline)) INLINE void find_1d_index(const float *table,
 
   const float delta = (size - 1) / (table[size - 1] - table[0]);
 
-  // MATTHIEU: to do: Exploit alignment of the arrays
+  /* Indicate that the whole array is aligned on boundaries */
+  swift_align_information(float, table, 64);
 
   if (swift_unlikely_branch(x < table[0])) {
     /* We are below the first element */
@@ -166,8 +167,8 @@ __attribute__((always_inline)) INLINE float interpolation_3d(
   const float ty = 1.f - dy;
   const float tz = 1.f - dz;
 
-  // MATTHIEU: to do: re-arrange to exploit faster access on the last entries
-  // MATTHIEU: to do: Exploit alignment of the arrays
+  /* Indicate that the whole array is aligned on boundaries */
+  swift_align_information(float, table, 64);
 
   /* Linear interpolation along each axis. We read the table 2^3=8 times */
   float result = tx * ty * tz *
@@ -221,8 +222,8 @@ __attribute__((always_inline)) INLINE float interpolation_4d(
   const float tz = 1.f - dz;
   const float tw = 1.f - dw;
 
-  // MATTHIEU: to do: re-arrange to exploit faster access on the last entries
-  // MATTHIEU: to do: Exploit alignment of the arrays
+  /* Indicate that the whole array is aligned on boundaries */
+  swift_align_information(float, table, 64);
 
   /* Linear interpolation along each axis. We read the table 2^4=16 times */
   float result =
@@ -311,10 +312,13 @@ __attribute__((always_inline)) INLINE float interpolation_4d_no_y(
   const float tz = 1.f - dz;
   const float tw = 1.f - dw;
 
-  // MATTHIEU: to do: re-arrange to exploit faster access on the last entries
-  // MATTHIEU: to do: Exploit alignment of the arrays
+  /* Indicate that the whole array is aligned on boundaries */
+  swift_align_information(float, table, 64);
 
-  /* Linear interpolation along each axis. We read the table 2^4=16 times */
+  /* Linear interpolation along each axis. We read the table 2^3=16 times */
+  /* Note that we intentionally kept the table access along the axis where */
+  /* we do not interpolate as comments in the code to allow readers to */
+  /* understand what is going on. */
   float result =
       tx * ty * tz * tw *
       table[row_major_index_4d(xi + 0, yi + 0, zi + 0, wi + 0, Nx, Ny, Nz, Nw)];

@@ -228,33 +228,29 @@ void eagle_read_cooling_table_header(struct cooling_function_data* cooling) {
 
   /* Now allocate all the header arrays */
 
-  // MATTHIEU: to do: Use aligned allocation.
-
   /* Table for log_10(T) */
-  cooling->table_temperatures =
-      malloc(eagle_cooling_N_temperature * sizeof(float));
-  if (cooling->table_temperatures == NULL)
+  if(posix_memalign((void**) &cooling->table_temperatures, 64,
+		    eagle_cooling_N_temperature * sizeof(float)) != 0)
     error("Error allocating memory for temperatures table");
 
   /* Table for log_10(n_H) */
-  cooling->table_nH = malloc(eagle_cooling_N_density * sizeof(float));
-  if (cooling->table_nH == NULL)
+  if(posix_memalign((void**) &cooling->table_nH, 64,
+		    eagle_cooling_N_density * sizeof(float))  != 0)
     error("Error allocating memory for H density table");
 
   /* Table for log_10(u) */
-  cooling->table_u = malloc(eagle_cooling_N_temperature * sizeof(float));
-  if (cooling->table_u == NULL)
+  if(posix_memalign((void**) &cooling->table_u, 64,
+		    eagle_cooling_N_temperature * sizeof(float)) != 0)
     error("Error allocating memory for internal energy table");
 
   /* Table for He abundance */
-  cooling->table_He_frac = malloc(eagle_cooling_N_He_frac * sizeof(float));
-  if (cooling->table_He_frac == NULL)
+  if(posix_memalign((void**) &cooling->table_He_frac, 64,
+		    eagle_cooling_N_He_frac * sizeof(float)) != 0)
     error("Error allocating memory for Helium abundance table");
 
   /* Table for solar abundance */
-  cooling->table_solar_abundances =
-      malloc(eagle_cooling_N_abundances * sizeof(float));
-  if (cooling->table_solar_abundances == NULL)
+  if(posix_memalign((void**) &cooling->table_solar_abundances, 64,
+		    eagle_cooling_N_abundances * sizeof(float)) != 0)
     error("Error allocating memory for solar abundance table");
 
   /* Now, read the content of these tables */
