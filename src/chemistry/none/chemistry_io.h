@@ -29,7 +29,8 @@
  *
  * @return Returns the number of fields to write.
  */
-int chemistry_read_particles(struct part* parts, struct io_props* list) {
+INLINE static int chemistry_read_particles(struct part* parts,
+                                           struct io_props* list) {
 
   /* update list according to hydro_io */
 
@@ -45,7 +46,8 @@ int chemistry_read_particles(struct part* parts, struct io_props* list) {
  *
  * @return Returns the number of fields to write.
  */
-int chemistry_write_particles(const struct part* parts, struct io_props* list) {
+INLINE static int chemistry_write_particles(const struct part* parts,
+                                            struct io_props* list) {
 
   /* update list according to hydro_io */
 
@@ -53,13 +55,16 @@ int chemistry_write_particles(const struct part* parts, struct io_props* list) {
   return 0;
 }
 
+#ifdef HAVE_HDF5
+
 /**
  * @brief Writes the current model of SPH to the file
- * @param h_grpsph The HDF5 group in which to write
+ * @param h_grp The HDF5 group in which to write
  */
-void chemistry_write_flavour(hid_t h_grpsph) {
+INLINE static void chemistry_write_flavour(hid_t h_grp) {
 
-  io_write_attribute_s(h_grpsph, "Chemistry Model", "None");
+  io_write_attribute_s(h_grp, "Chemistry Model", "None");
 }
+#endif
 
 #endif /* SWIFT_CHEMISTRY_IO_NONE_H */

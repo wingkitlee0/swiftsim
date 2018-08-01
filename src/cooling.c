@@ -34,7 +34,7 @@
  * @param phys_const The physical constants in internal units.
  * @param cooling The cooling properties to initialize
  */
-void cooling_init(const struct swift_params* parameter_file,
+void cooling_init(struct swift_params* parameter_file,
                   const struct unit_system* us,
                   const struct phys_const* phys_const,
                   struct cooling_function_data* cooling) {
@@ -55,7 +55,7 @@ void cooling_print(const struct cooling_function_data* cooling) {
 }
 
 /**
- * @brief Write a hydro_props struct to the given FILE as a stream of bytes.
+ * @brief Write a cooling struct to the given FILE as a stream of bytes.
  *
  * @param cooling the struct
  * @param stream the file stream

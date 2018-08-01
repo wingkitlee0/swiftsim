@@ -39,6 +39,7 @@
 #include "collectgroup.h"
 #include "cooling_struct.h"
 #include "gravity_properties.h"
+#include "mesh_gravity.h"
 #include "parser.h"
 #include "partition.h"
 #include "potential.h"
@@ -125,14 +126,20 @@ struct engine {
   /* The minimum and maximum allowed dt */
   double dt_min, dt_max;
 
+  /* Maximum time-step allowed by the RMS condition in cosmology runs. */
+  double dt_max_RMS_displacement;
+
+  /* Dimensionless factor for the RMS time-step condition. */
+  double max_RMS_displacement_factor;
+
   /* Time of the simulation beginning */
-  double timeBegin;
+  double time_begin;
 
   /* Time of the simulation end */
-  double timeEnd;
+  double time_end;
 
   /* The previous system time. */
-  double timeOld;
+  double time_old;
   integertime_t ti_old;
 
   /* The current system time. */
@@ -142,12 +149,15 @@ struct engine {
   /* The highest active bin at this time */
   timebin_t max_active_bin;
 
+  /* The lowest active bin at this time */
+  timebin_t min_active_bin;
+
   /* Time step */
-  double timeStep;
+  double time_step;
 
   /* Time base */
-  double timeBase;
-  double timeBase_inv;
+  double time_base;
+  double time_base_inv;
 
   /* Minimal hydro ti_end for the next time-step */
   integertime_t ti_hydro_end_min;
@@ -177,39 +187,52 @@ struct engine {
   integertime_t ti_beg_max;
 
   /* Number of particles updated in the previous step */
-  size_t updates, g_updates, s_updates;
+  long long updates, g_updates, s_updates;
+
+  /* Number of updates since the last rebuild */
+  long long updates_since_rebuild;
+  long long g_updates_since_rebuild;
+  long long s_updates_since_rebuild;
 
   /* Properties of the previous step */
   int step_props;
 
   /* Total numbers of particles in the system. */
-  long long total_nr_parts, total_nr_gparts;
+  long long total_nr_parts, total_nr_gparts, total_nr_sparts;
 
   /* The internal system of units */
   const struct unit_system *internal_units;
 
   /* Snapshot information */
-  double timeFirstSnapshot;
-  double deltaTimeSnapshot;
-  integertime_t ti_nextSnapshot;
-  char snapshotBaseName[PARSER_MAX_LINE_SIZE];
-  int snapshotCompression;
-  struct unit_system *snapshotUnits;
-  int snapshotOutputCount;
+  double a_first_snapshot;
+  double time_first_snapshot;
+  double delta_time_snapshot;
+
+  /* Integer time of the next snapshot */
+  integertime_t ti_next_snapshot;
+
+  char snapshot_base_name[PARSER_MAX_LINE_SIZE];
+  int snapshot_compression;
+  int snapshot_label_delta;
+  struct unit_system *snapshot_units;
+  int snapshot_output_count;
 
   /* Statistics information */
-  FILE *file_stats;
-  double timeLastStatistics;
-  double deltaTimeStatistics;
+  double a_first_statistics;
+  double time_first_statistics;
+  double delta_time_statistics;
 
-  /* Timesteps information */
+  /* Integer time of the next statistics dump */
+  integertime_t ti_next_stats;
+
+  /* File handle for the statistics */
+  FILE *file_stats;
+
+  /* File handle for the timesteps information */
   FILE *file_timesteps;
 
   /* The current step number. */
   int step;
-
-  /* The number of particles updated in the previous step. */
-  int count_step;
 
   /* Data for the threads' barrier. */
   swift_barrier_t wait_barrier;
@@ -256,11 +279,11 @@ struct engine {
 
   /* Linked list for cell-task association. */
   struct link *links;
-  int nr_links, size_links;
+  size_t nr_links, size_links;
 
   /* Average number of tasks per cell. Used to estimate the sizes
    * of the various task arrays. */
-  int tasks_per_cell;
+  size_t tasks_per_cell;
 
   /* Are we talkative ? */
   int verbose;
@@ -268,11 +291,17 @@ struct engine {
   /* Physical constants definition */
   const struct phys_const *physical_constants;
 
+  /* The cosmological model */
+  struct cosmology *cosmology;
+
   /* Properties of the hydro scheme */
   const struct hydro_props *hydro_properties;
 
   /* Properties of the self-gravity scheme */
-  const struct gravity_props *gravity_properties;
+  struct gravity_props *gravity_properties;
+
+  /* The mesh used for long-range gravity forces */
+  struct pm_mesh *mesh;
 
   /* Properties of external gravitational potential */
   const struct external_potential *external_potential;
@@ -281,13 +310,13 @@ struct engine {
   const struct cooling_function_data *cooling_func;
 
   /* Properties of the chemistry model */
-  const struct chemistry_data *chemistry;
+  const struct chemistry_global_data *chemistry;
 
   /* Properties of source terms */
   struct sourceterms *sourceterms;
 
   /* The (parsed) parameter file */
-  const struct swift_params *parameter_file;
+  struct swift_params *parameter_file;
 
   /* Temporary struct to hold a group of deferable properties (in MPI mode
    * these are reduced together, but may not be required just yet). */
@@ -295,6 +324,9 @@ struct engine {
 
   /* Whether to dump restart files. */
   int restart_dump;
+
+  /* Whether to save previous generation of restart files. */
+  int restart_save;
 
   /* Whether to dump restart files after the last step. */
   int restart_onexit;
@@ -315,25 +347,28 @@ struct engine {
 /* Function prototypes. */
 void engine_barrier(struct engine *e);
 void engine_compute_next_snapshot_time(struct engine *e);
+void engine_compute_next_statistics_time(struct engine *e);
+void engine_recompute_displacement_constraint(struct engine *e);
 void engine_unskip(struct engine *e);
 void engine_drift_all(struct engine *e);
 void engine_drift_top_multipoles(struct engine *e);
 void engine_reconstruct_multipoles(struct engine *e);
 void engine_print_stats(struct engine *e);
 void engine_dump_snapshot(struct engine *e);
-void engine_init(
-    struct engine *e, struct space *s, const struct swift_params *params,
-    long long Ngas, long long Ndm, int policy, int verbose,
-    struct repartition *reparttype, const struct unit_system *internal_units,
-    const struct phys_const *physical_constants,
-    const struct hydro_props *hydro, const struct gravity_props *gravity,
-    const struct external_potential *potential,
-    const struct cooling_function_data *cooling_func,
-    const struct chemistry_data *chemistry, struct sourceterms *sourceterms);
-void engine_config(int restart, struct engine *e,
-                   const struct swift_params *params, int nr_nodes, int nodeID,
-                   int nr_threads, int with_aff, int verbose,
-                   const char *restart_file);
+void engine_init(struct engine *e, struct space *s, struct swift_params *params,
+                 long long Ngas, long long Ngparts, long long Nstars,
+                 int policy, int verbose, struct repartition *reparttype,
+                 const struct unit_system *internal_units,
+                 const struct phys_const *physical_constants,
+                 struct cosmology *cosmo, const struct hydro_props *hydro,
+                 struct gravity_props *gravity, struct pm_mesh *mesh,
+                 const struct external_potential *potential,
+                 const struct cooling_function_data *cooling_func,
+                 const struct chemistry_global_data *chemistry,
+                 struct sourceterms *sourceterms);
+void engine_config(int restart, struct engine *e, struct swift_params *params,
+                   int nr_nodes, int nodeID, int nr_threads, int with_aff,
+                   int verbose, const char *restart_file);
 void engine_launch(struct engine *e);
 void engine_prepare(struct engine *e);
 void engine_init_particles(struct engine *e, int flag_entropy_ICs,
@@ -353,8 +388,8 @@ void engine_makeproxies(struct engine *e);
 void engine_redistribute(struct engine *e);
 void engine_print_policy(struct engine *e);
 int engine_is_done(struct engine *e);
-void engine_pin();
-void engine_unpin();
+void engine_pin(void);
+void engine_unpin(void);
 void engine_clean(struct engine *e);
 int engine_estimate_nr_tasks(struct engine *e);
 

@@ -24,7 +24,10 @@
 #include <unistd.h>
 #include "swift.h"
 
-#ifdef WITH_VECTORIZATION
+/* Other schemes need to be added here if they are not vectorized, otherwise
+ * this test will simply not compile. */
+
+#if defined(GADGET2_SPH) && defined(WITH_VECTORIZATION)
 
 #define array_align sizeof(float) * VEC_SIZE
 #define ACC_THRESHOLD 1e-5
@@ -71,7 +74,7 @@ struct part *make_particles(size_t count, double *offset, double spacing,
   p->h = h;
   p->id = ++(*partId);
 
-#if !defined(GIZMO_SPH) && !defined(SHADOWFAX_SPH)
+#if !defined(GIZMO_MFV_SPH) && !defined(SHADOWFAX_SPH)
   p->mass = 1.0f;
 #endif
 
@@ -104,7 +107,9 @@ struct part *make_particles(size_t count, double *offset, double spacing,
  */
 void prepare_force(struct part *parts, size_t count) {
 
-#if !defined(GIZMO_SPH) && !defined(SHADOWFAX_SPH) && !defined(MINIMAL_SPH)
+#if !defined(GIZMO_MFV_SPH) && !defined(SHADOWFAX_SPH) &&       \
+    !defined(MINIMAL_SPH) && !defined(MINIMAL_MULTI_MAT_SPH) && \
+    !defined(HOPKINS_PU_SPH)
   struct part *p;
   for (size_t i = 0; i < count; ++i) {
     p = &parts[i];
@@ -130,20 +135,21 @@ void dump_indv_particle_fields(char *fileName, struct part *p) {
           "%8.5f "
           "%8.5f %8.5f %13e %13e %13e %13e %13e %8.5f %8.5f\n",
           p->id, p->x[0], p->x[1], p->x[2], p->v[0], p->v[1], p->v[2], p->h,
-          hydro_get_density(p),
-#if defined(MINIMAL_SPH) || defined(SHADOWFAX_SPH)
+          hydro_get_comoving_density(p),
+#if defined(MINIMAL_SPH) || defined(MINIMAL_MULTI_MAT_SPH) || \
+    defined(SHADOWFAX_SPH)
           0.f,
 #else
           p->density.div_v,
 #endif
-          hydro_get_entropy(p), hydro_get_internal_energy(p),
-          hydro_get_pressure(p), hydro_get_soundspeed(p), p->a_hydro[0],
-          p->a_hydro[1], p->a_hydro[2], p->force.h_dt,
+          hydro_get_comoving_entropy(p), hydro_get_comoving_internal_energy(p),
+          hydro_get_comoving_pressure(p), hydro_get_comoving_soundspeed(p),
+          p->a_hydro[0], p->a_hydro[1], p->a_hydro[2], p->force.h_dt,
 #if defined(GADGET2_SPH)
           p->force.v_sig, p->entropy_dt, 0.f
 #elif defined(DEFAULT_SPH)
           p->force.v_sig, 0.f, p->force.u_dt
-#elif defined(MINIMAL_SPH)
+#elif defined(MINIMAL_SPH) || defined(HOPKINS_PU_SPH)
           p->force.v_sig, 0.f, p->u_dt
 #else
           0.f, 0.f, 0.f
@@ -213,6 +219,9 @@ void test_interactions(struct part test_part, struct part *parts, size_t count,
   ticks serial_time = 0;
   ticks vec_time = 0;
 
+  const float a = 1.f;
+  const float H = 0.f;
+
   char serial_filename[200] = "";
   char vec_filename[200] = "";
 
@@ -274,7 +283,7 @@ void test_interactions(struct part test_part, struct part *parts, size_t count,
 #endif
     for (size_t i = 0; i < count; i++) {
       IACT(r2[i], &(dx[3 * i]), pi_serial.h, pj_serial[i].h, &pi_serial,
-           &pj_serial[i]);
+           &pj_serial[i], a, H);
     }
     serial_time += getticks() - tic;
   }
@@ -419,6 +428,9 @@ void test_force_interactions(struct part test_part, struct part *parts,
   char serial_filename[200] = "";
   char vec_filename[200] = "";
 
+  const float a = 1.f;
+  const float H = 0.f;
+
   strcpy(serial_filename, filePrefix);
   strcpy(vec_filename, filePrefix);
   sprintf(serial_filename + strlen(serial_filename), "_serial.dat");
@@ -497,7 +509,7 @@ void test_force_interactions(struct part test_part, struct part *parts,
 #endif
     for (size_t i = 0; i < count; i++) {
       runner_iact_nonsym_force(r2[i], &(dx[3 * i]), pi_serial.h, pj_serial[i].h,
-                               &pi_serial, &pj_serial[i]);
+                               &pi_serial, &pj_serial[i], a, H);
     }
     serial_time += getticks() - tic;
   }
@@ -541,7 +553,9 @@ void test_force_interactions(struct part test_part, struct part *parts,
       vizq[i] = pi_vec.v[2];
       rhoiq[i] = pi_vec.rho;
       grad_hiq[i] = pi_vec.force.f;
+#if !defined(HOPKINS_PU_SPH)
       pOrhoi2q[i] = pi_vec.force.P_over_rho2;
+#endif
       balsaraiq[i] = pi_vec.force.balsara;
       ciq[i] = pi_vec.force.soundspeed;
 
@@ -552,7 +566,9 @@ void test_force_interactions(struct part test_part, struct part *parts,
       vjzq[i] = pj_vec[i].v[2];
       rhojq[i] = pj_vec[i].rho;
       grad_hjq[i] = pj_vec[i].force.f;
+#if !defined(HOPKINS_PU_SPH)
       pOrhoj2q[i] = pj_vec[i].force.P_over_rho2;
+#endif
       balsarajq[i] = pj_vec[i].force.balsara;
       cjq[i] = pj_vec[i].force.soundspeed;
     }
@@ -604,8 +620,9 @@ void test_force_interactions(struct part test_part, struct part *parts,
             (viz_vec), rhoi_vec, grad_hi_vec, pOrhoi2_vec, balsara_i_vec,
             ci_vec, &(vjxq[i]), &(vjyq[i]), &(vjzq[i]), &(rhojq[i]),
             &(grad_hjq[i]), &(pOrhoj2q[i]), &(balsarajq[i]), &(cjq[i]),
-            &(mjq[i]), hi_inv_vec, &(hj_invq[i]), &a_hydro_xSum, &a_hydro_ySum,
-            &a_hydro_zSum, &h_dtSum, &v_sigSum, &entropy_dtSum, mask, mask2, 0);
+            &(mjq[i]), hi_inv_vec, &(hj_invq[i]), a, H, &a_hydro_xSum,
+            &a_hydro_ySum, &a_hydro_zSum, &h_dtSum, &v_sigSum, &entropy_dtSum,
+            mask, mask2, 0);
       } else { /* Only use one vector for interaction. */
 
         vector my_r2, my_dx, my_dy, my_dz, hj, hj_inv;
@@ -620,7 +637,7 @@ void test_force_interactions(struct part test_part, struct part *parts,
             &my_r2, &my_dx, &my_dy, &my_dz, vix_vec, viy_vec, viz_vec, rhoi_vec,
             grad_hi_vec, pOrhoi2_vec, balsara_i_vec, ci_vec, &(vjxq[i]),
             &(vjyq[i]), &(vjzq[i]), &(rhojq[i]), &(grad_hjq[i]), &(pOrhoj2q[i]),
-            &(balsarajq[i]), &(cjq[i]), &(mjq[i]), hi_inv_vec, hj_inv,
+            &(balsarajq[i]), &(cjq[i]), &(mjq[i]), hi_inv_vec, hj_inv, a, H,
             &a_hydro_xSum, &a_hydro_ySum, &a_hydro_zSum, &h_dtSum, &v_sigSum,
             &entropy_dtSum, mask);
       }
@@ -631,7 +648,9 @@ void test_force_interactions(struct part test_part, struct part *parts,
     VEC_HADD(a_hydro_zSum, piq[0]->a_hydro[2]);
     VEC_HADD(h_dtSum, piq[0]->force.h_dt);
     VEC_HMAX(v_sigSum, piq[0]->force.v_sig);
+#if !defined(HOPKINS_PU_SPH)
     VEC_HADD(entropy_dtSum, piq[0]->entropy_dt);
+#endif
 
     vec_time += getticks() - vec_tic;
   }
@@ -729,6 +748,6 @@ int main(int argc, char *argv[]) {
 
 #else
 
-int main() { return 1; }
+int main(int argc, char *argv[]) { return 1; }
 
 #endif

@@ -45,15 +45,16 @@
  *
  * Note that this turns into a no-op but gives information to the compiler.
  *
+ * @param type The type of the array.
  * @param array The array.
  * @param alignment The alignment in bytes of the array.
  */
 #if defined(__ICC)
-#define swift_align_information(array, alignment) \
+#define swift_align_information(type, array, alignment) \
   __assume_aligned(array, alignment);
 #elif defined(__GNUC__)
-#define swift_align_information(array, alignment) \
-  array = __builtin_assume_aligned(array, alignment);
+#define swift_align_information(type, array, alignment) \
+  array = (type *)__builtin_assume_aligned(array, alignment);
 #else
 #define swift_align_information(array, alignment) ;
 #endif
@@ -72,7 +73,7 @@
  */
 #define swift_declare_aligned_ptr(type, array, ptr, alignment) \
   type *restrict array = ptr;                                  \
-  swift_align_information(array, alignment);
+  swift_align_information(type, array, alignment);
 
 /**
  * @brief Macro to tell the compiler that a given number is 0 modulo a given

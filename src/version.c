@@ -37,6 +37,10 @@
 #include <fftw3.h>
 #endif
 
+#ifdef HAVE_LIBGSL
+#include <gsl/gsl_version.h>
+#endif
+
 /* Some standard headers. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -142,7 +146,7 @@ const char *configuration_options(void) {
   static int initialised = 0;
   static const char *config = SWIFT_CONFIG_FLAGS;
   if (!initialised) {
-    snprintf(buf, 1024, "'%s'", config);
+    snprintf(buf, 1024, "'%.1021s'", config);
     initialised = 1;
   }
   return buf;
@@ -158,7 +162,7 @@ const char *compilation_cflags(void) {
   static int initialised = 0;
   static const char *cflags = SWIFT_CFLAGS;
   if (!initialised) {
-    snprintf(buf, 1024, "'%s'", cflags);
+    snprintf(buf, 1024, "'%.1021s'", cflags);
     initialised = 1;
   }
   return buf;
@@ -268,12 +272,12 @@ const char *mpi_version(void) {
 #else
   /* Use autoconf guessed value. */
   static char lib_version[60] = {0};
-  snprintf(lib_version, 60, "%s", SWIFT_MPI_LIBRARY);
+  snprintf(lib_version, 60, "%.60s", SWIFT_MPI_LIBRARY);
 #endif
 
   /* Numeric version. */
   MPI_Get_version(&std_version, &std_subversion);
-  snprintf(version, 80, "%s (MPI std v%i.%i)", lib_version, std_version,
+  snprintf(version, 80, "%.60s (MPI std v%i.%i)", lib_version, std_version,
            std_subversion);
 #else
   sprintf(version, "Code was not compiled with MPI support");
@@ -333,6 +337,22 @@ const char *fftw3_version(void) {
 }
 
 /**
+ * @brief return the GSL version used when SWIFT was built.
+ *
+ * @result description of the GSL version.
+ */
+const char *libgsl_version(void) {
+
+  static char version[256] = {0};
+#if defined(HAVE_LIBGSL)
+  sprintf(version, "%.255s", gsl_version);
+#else
+  sprintf(version, "Unknown version");
+#endif
+  return version;
+}
+
+/**
  * @brief return the thread barrier used in SWIFT.
  *
  * @result description of the thread barriers
@@ -344,6 +364,26 @@ const char *thread_barrier_version(void) {
   sprintf(version, "%s", "pthread");
 #else
   sprintf(version, "homemade");
+#endif
+  return version;
+}
+
+/**
+ * @brief return the allocator library used in SWIFT.
+ *
+ * @result description of the allocation library
+ */
+const char *allocator_version(void) {
+
+  static char version[256] = {0};
+#if defined(HAVE_TBBMALLOC)
+  sprintf(version, "TBB malloc");
+#elif defined(HAVE_TCMALLOC)
+  sprintf(version, "tc-malloc");
+#elif defined(HAVE_JEMALLOC)
+  sprintf(version, "je-malloc");
+#else
+  sprintf(version, "Compiler version (probably glibc)");
 #endif
   return version;
 }
@@ -375,6 +415,9 @@ void greetings(void) {
 #endif
 #ifdef HAVE_FFTW
   printf(" FFTW library version: %s\n", fftw3_version());
+#endif
+#ifdef HAVE_LIBGSL
+  printf(" GSL  library version: %s\n", libgsl_version());
 #endif
 #ifdef WITH_MPI
   printf(" MPI library: %s\n", mpi_version());

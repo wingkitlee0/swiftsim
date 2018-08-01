@@ -38,12 +38,16 @@
 #include "./potential/disc_patch/potential.h"
 #elif defined(EXTERNAL_POTENTIAL_SINE_WAVE)
 #include "./potential/sine_wave/potential.h"
+#elif defined(EXTERNAL_POTENTIAL_POINTMASS_RING)
+#include "./potential/point_mass_ring/potential.h"
+#elif defined(EXTERNAL_POTENTIAL_POINTMASS_SOFT)
+#include "./potential/point_mass_softened/potential.h"
 #else
 #error "Invalid choice of external potential"
 #endif
 
 /* Now, some generic functions, defined in the source file */
-void potential_init(const struct swift_params* parameter_file,
+void potential_init(struct swift_params* parameter_file,
                     const struct phys_const* phys_const,
                     const struct unit_system* us, const struct space* s,
                     struct external_potential* potential);

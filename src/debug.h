@@ -36,8 +36,8 @@ void printgParticle_single(struct gpart *gp);
 
 int checkSpacehmax(struct space *s);
 int checkCellhdxmax(const struct cell *c, int *depth);
-void dumpCells(const char *prefix, int active, int mpiactive, int pactive,
-               struct space *s, int rank, int step);
+void dumpCells(const char *prefix, int super, int active, int mpiactive,
+               int pactive, struct space *s, int rank, int step);
 
 #if defined(WITH_MPI) && defined(HAVE_PARMETIS)
 #include "parmetis.h"
@@ -51,5 +51,5 @@ void dumpCellRanks(const char *prefix, struct cell *cells_top, int nr_cells);
 
 void getProcMemUse(long *size, long *resident, long *share, long *trs,
                    long *lrs, long *drs, long *dt);
-void printProcMemUse();
+void printProcMemUse(void);
 #endif /* SWIFT_DEBUG_H */

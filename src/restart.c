@@ -93,7 +93,7 @@ char **restart_locate(const char *dir, const char *basename, int *nfiles) {
     char **files = NULL;
     if (glob(pattern, 0, NULL, &globbuf) == 0) {
       *nfiles = globbuf.gl_pathc;
-      files = malloc(sizeof(char *) * *nfiles);
+      files = (char **)malloc(sizeof(char *) * *nfiles);
       for (int i = 0; i < *nfiles; i++) {
         files[i] = strdup(globbuf.gl_pathv[i]);
       }
@@ -128,20 +128,24 @@ void restart_locate_free(int nfiles, char **files) {
  */
 void restart_write(struct engine *e, const char *filename) {
 
+  /* Save a backup the existing restart file, if requested. */
+  if (e->restart_save) restart_save_previous(filename);
+
   FILE *stream = fopen(filename, "w");
   if (stream == NULL)
     error("Failed to open restart file: %s (%s)", filename, strerror(errno));
 
   /* Dump our signature and version. */
-  restart_write_blocks(SWIFT_RESTART_SIGNATURE, strlen(SWIFT_RESTART_SIGNATURE),
-                       1, stream, "signature", "SWIFT signature");
+  restart_write_blocks((void *)SWIFT_RESTART_SIGNATURE,
+                       strlen(SWIFT_RESTART_SIGNATURE), 1, stream, "signature",
+                       "SWIFT signature");
   restart_write_blocks((void *)package_version(), strlen(package_version()), 1,
                        stream, "version", "SWIFT version");
 
   engine_struct_dump(e, stream);
 
   /* Just an END statement to spot truncated files. */
-  restart_write_blocks(SWIFT_RESTART_END_SIGNATURE,
+  restart_write_blocks((void *)SWIFT_RESTART_END_SIGNATURE,
                        strlen(SWIFT_RESTART_END_SIGNATURE), 1, stream,
                        "endsignature", "SWIFT end signature");
 
@@ -216,7 +220,10 @@ void restart_read_blocks(void *ptr, size_t size, size_t nblocks, FILE *stream,
             errstr, head.len, nblocks * size);
 
     /* Return label, if required. */
-    if (label != NULL) strncpy(label, head.label, LABLEN);
+    if (label != NULL) {
+      head.label[LABLEN] = '\0';
+      strncpy(label, head.label, LABLEN + 1);
+    }
 
     nread = fread(ptr, size, nblocks, stream);
     if (nread != nblocks)
@@ -270,7 +277,7 @@ void restart_write_blocks(void *ptr, size_t size, size_t nblocks, FILE *stream,
  * @result 1 if the file was found.
  */
 int restart_stop_now(const char *dir, int cleanup) {
-  static struct stat buf;
+  struct stat buf;
   char filename[FNAMELEN];
   strcpy(filename, dir);
   strcat(filename, "/stop");
@@ -282,4 +289,48 @@ int restart_stop_now(const char *dir, int cleanup) {
     return 1;
   }
   return 0;
+}
+
+/**
+ * @brief check if a file with the given name exists and rename to
+ *        {filename}.prev. Used to move old restart files before overwriting.
+ *
+ *        Does nothing if the file does not exist.
+ *
+ * @param filename the name of the file to check.
+ */
+void restart_save_previous(const char *filename) {
+  struct stat buf;
+  if (stat(filename, &buf) == 0) {
+    char newname[FNAMELEN];
+    strcpy(newname, filename);
+    strcat(newname, ".prev");
+    if (rename(filename, newname) != 0) {
+      /* Worth a complaint, this should not happen. */
+      message("Failed to rename file '%s' to '%s' (%s)", filename, newname,
+              strerror(errno));
+    }
+  }
+}
+
+/**
+ * @brief check if a saved file with the given prefix name exists and remove
+ *        it. Used to remove old restart files before a save sequence
+ *        so that old saved files are not mixed up with new ones.
+ *
+ *        Does nothing if a saved file does not exist.
+ *
+ * @param filename the prefix used when the saved file was created.
+ */
+void restart_remove_previous(const char *filename) {
+  struct stat buf;
+  char newname[FNAMELEN];
+  strcpy(newname, filename);
+  strcat(newname, ".prev");
+  if (stat(newname, &buf) == 0) {
+    if (unlink(newname) != 0) {
+      /* Worth a complaint, this should not happen. */
+      message("Failed to unlink file '%s' (%s)", newname, strerror(errno));
+    }
+  }
 }

@@ -40,12 +40,19 @@ typedef char timebin_t;
 /*! Fictious time-bin to hold inhibited particles */
 #define time_bin_inhibited (num_time_bins + 2)
 
+/*! Fictitious time-bin for particles not awaken */
+#define time_bin_not_awake (0)
+
+/*! Fictitious time-bin for particles woken up */
+#define time_bin_awake (-1)
+
 /**
  * @brief Returns the integer time interval corresponding to a time bin
  *
  * @param bin The time bin of interest.
  */
-static INLINE integertime_t get_integer_timestep(timebin_t bin) {
+__attribute__((const)) static INLINE integertime_t
+get_integer_timestep(timebin_t bin) {
 
   if (bin <= 0) return 0;
   return 1LL << (bin + 1);
@@ -56,7 +63,8 @@ static INLINE integertime_t get_integer_timestep(timebin_t bin) {
  *
  * Assumes that integertime_t maps to an unsigned long long.
  */
-static INLINE timebin_t get_time_bin(integertime_t time_step) {
+__attribute__((const)) static INLINE timebin_t
+get_time_bin(integertime_t time_step) {
 
   /* ((int) log_2(time_step)) - 1 */
   return (timebin_t)(62 - intrinsics_clzll(time_step));
@@ -68,7 +76,8 @@ static INLINE timebin_t get_time_bin(integertime_t time_step) {
  * @param bin The time bin of interest.
  * @param timeBase the minimal time-step size of the simulation.
  */
-static INLINE double get_timestep(timebin_t bin, double timeBase) {
+__attribute__((const)) static INLINE double get_timestep(timebin_t bin,
+                                                         double timeBase) {
 
   return get_integer_timestep(bin) * timeBase;
 }
@@ -80,8 +89,8 @@ static INLINE double get_timestep(timebin_t bin, double timeBase) {
  * @param ti_current The current time on the integer time line.
  * @param bin The time bin of interest.
  */
-static INLINE integertime_t get_integer_time_begin(integertime_t ti_current,
-                                                   timebin_t bin) {
+__attribute__((const)) static INLINE integertime_t
+get_integer_time_begin(integertime_t ti_current, timebin_t bin) {
 
   const integertime_t dti = get_integer_timestep(bin);
   if (dti == 0)
@@ -97,8 +106,8 @@ static INLINE integertime_t get_integer_time_begin(integertime_t ti_current,
  * @param ti_current The current time on the integer time line.
  * @param bin The time bin of interest.
  */
-static INLINE integertime_t get_integer_time_end(integertime_t ti_current,
-                                                 timebin_t bin) {
+__attribute__((const)) static INLINE integertime_t
+get_integer_time_end(integertime_t ti_current, timebin_t bin) {
 
   const integertime_t dti = get_integer_timestep(bin);
   if (dti == 0)
@@ -112,7 +121,8 @@ static INLINE integertime_t get_integer_time_end(integertime_t ti_current,
  *
  * @param time The current point on the time line.
  */
-static INLINE timebin_t get_max_active_bin(integertime_t time) {
+__attribute__((const)) static INLINE timebin_t
+get_max_active_bin(integertime_t time) {
 
   if (time == 0) return num_time_bins;
 
@@ -120,6 +130,19 @@ static INLINE timebin_t get_max_active_bin(integertime_t time) {
   while (!((1LL << (bin + 1)) & time)) ++bin;
 
   return bin;
+}
+
+/**
+ * @brief Returns the lowest active time bin at a given point on the time line.
+ *
+ * @param ti_current The current point on the time line.
+ * @param ti_old The last synchronisation point on the time line.
+ */
+__attribute__((const)) static INLINE timebin_t
+get_min_active_bin(integertime_t ti_current, integertime_t ti_old) {
+
+  const timebin_t min_bin = get_max_active_bin(ti_current - ti_old);
+  return (ti_old > 0) ? min_bin : (min_bin - 1);
 }
 
 #endif /* SWIFT_TIMELINE_H */
