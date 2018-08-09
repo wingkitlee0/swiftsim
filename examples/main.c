@@ -736,7 +736,7 @@ int main(int argc, char *argv[]) {
     /* Check once and for all that we don't have unwanted links */
     if (!with_stars && !dry_run) {
       for (size_t k = 0; k < Ngpart; ++k)
-        if (gparts[k].type == swift_type_star) error("Linking problem");
+        if (gparts[k].type == swift_type_stars) error("Linking problem");
     }
     if (!with_hydro && !dry_run) {
       for (size_t k = 0; k < Ngpart; ++k)
@@ -762,7 +762,7 @@ int main(int argc, char *argv[]) {
 
     if (myrank == 0)
       message(
-          "Read %lld gas particles, %lld star particles and %lld gparts from "
+          "Read %lld gas particles, %lld stars particles and %lld gparts from "
           "the "
           "ICs.",
           N_total[0], N_total[2], N_total[1]);
@@ -895,7 +895,7 @@ int main(int argc, char *argv[]) {
     if (myrank == 0) {
       long long N_DM = N_total[1] - N_total[2] - N_total[0];
       message(
-          "Running on %lld gas particles, %lld star particles and %lld DM "
+          "Running on %lld gas particles, %lld stars particles and %lld DM "
           "particles (%lld gravity particles)",
           N_total[0], N_total[2], N_total[1] > 0 ? N_DM : 0, N_total[1]);
       message(
