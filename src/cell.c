@@ -187,7 +187,7 @@ int cell_pack(struct cell *restrict c, struct pcell *restrict pc) {
   pc->scount = c->scount;
 
   /* XXX hack: don't recurse below maximum expected depth of supercells. */
-  if (c->depth < 4)
+  if (c->depth < 5)
       c->tag = pc->tag = atomic_inc(&cell_next_tag) % cell_max_tag;
 #ifdef SWIFT_DEBUG_CHECKS
   pc->cellID = c->cellID;
