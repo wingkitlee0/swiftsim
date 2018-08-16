@@ -496,11 +496,9 @@ void task_print(const struct task *t) {
  * @brief Create global communicators for each of the subtasks.
  */
 void task_create_mpi_comms(void) {
-   MPI_Group group;
-   MPI_Comm_group(MPI_COMM_WORLD, &group);
-   for (int i = 0; i < task_subtype_count; i++) {
-     MPI_Comm_create(MPI_COMM_WORLD, group, &subtaskMPI_comms[i]);
-   }
+  for (int i = 0; i < task_subtype_count; i++) {
+    MPI_Comm_dup(MPI_COMM_WORLD, &subtaskMPI_comms[i]);
+  }
 }
 #endif
 
