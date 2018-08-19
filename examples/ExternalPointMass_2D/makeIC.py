@@ -36,7 +36,7 @@ const_unit_length_in_cgs   =   (1000*PARSEC_IN_CGS)
 const_unit_mass_in_cgs     =   (SOLAR_MASS_IN_CGS)
 const_unit_velocity_in_cgs =   (1e5)
 
-print("UnitMass_in_cgs:     ", const_unit_mass_in_cgs) 
+print("UnitMass_in_cgs:     ", const_unit_mass_in_cgs)
 print("UnitLength_in_cgs:   ", const_unit_length_in_cgs)
 print("UnitVelocity_in_cgs: ", const_unit_velocity_in_cgs)
 print("UnitTime_in_cgs:     ", const_unit_length_in_cgs / const_unit_velocity_in_cgs)
@@ -77,7 +77,7 @@ grp.attrs["Time"] = 0.0
 grp.attrs["NumFilesPerSnapshot"] = 1
 grp.attrs["MassTable"] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 grp.attrs["Flag_Entropy_ICs"] = [0, 0, 0, 0, 0, 0]
-grp.attrs["Dimension"] = 3
+grp.attrs["Dimension"] = 2
 
 #Runtime parameters
 grp = file.create_group("/RuntimePars")

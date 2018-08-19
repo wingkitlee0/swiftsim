@@ -50,7 +50,7 @@ header = f["Header"]
 box_size = float(header.attrs["BoxSize"][0])
 
 # Read the properties of the potential
-parameters = f["Parameters"]
+parameters = f["UnusedParameters"]
 mass = float(parameters.attrs["PointMassPotential:mass"])
 centre = [box_size/2, box_size/2, box_size/2]
 f.close()
@@ -119,6 +119,6 @@ xlabel("${\\rm{Time}}$", labelpad=0)
 ylabel("${\\rm{Angular~momentum}}$",labelpad=0)
 xlim(0, 8)
 
-savefig("angular_momentum.png", dpi=200)
+savefig("angular_momentum.pdf", dpi=200)
 
 
